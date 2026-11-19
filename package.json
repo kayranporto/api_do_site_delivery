@@ -8,8 +8,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
-    "test:node": "node --test tests/node/domain.test.js",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand && npm run test:node",
+    "test:node": "node --test tests/node/domain.test.js tests/node/application.test.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "verify:domain": "node ./scripts/verify-domain.mjs"
   },

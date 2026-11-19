@@ -4,7 +4,7 @@ Base independente para uma API que intermediará operações com serviços exter
 
 ## Estado do projeto
 
-Apenas a **Etapa 1 — Domain** foi implementada. Ainda não há servidor Express, rotas, banco, integrações externas, autenticação ou deploy.
+As etapas **1 — Domain** e **2 — Application** foram implementadas. Ainda não há servidor Express, rotas HTTP, banco, conectores reais de provedores, autenticação ou deploy.
 
 ## Requisitos
 
@@ -26,10 +26,10 @@ npm run verify:domain
 ## Testes automatizados
 
 ```bash
-# Suíte Jest (após npm install)
+# Suítes Jest e testes nativos do Node.js (após npm install)
 npm test
 
-# Verificação executável sem instalar dependências
+# Testes executáveis sem instalar dependências externas
 npm run test:node
 ```
 
@@ -37,20 +37,29 @@ npm run test:node
 
 ```text
 src/
-└── domain/
-    ├── entities/
+├── domain/
+│   ├── entities/
+│   ├── errors/
+│   ├── ports/
+│   ├── value-objects/
+│   └── index.js
+└── application/
     ├── errors/
     ├── ports/
-    ├── value-objects/
+    ├── services/
+    ├── use-cases/
     └── index.js
 
 tests/
-├── jest/domain/
-│   ├── entities/
-│   └── value-objects/
-└── node/domain.test.js
+├── jest/
+│   ├── application/
+│   └── domain/
+└── node/
+    ├── application.test.js
+    └── domain.test.js
 
 docs/
+├── application-design.md
 └── domain-design.md
 ```
 
@@ -61,6 +70,7 @@ docs/
 - Segredos são representados apenas por referências opacas; valores secretos não pertencem às entidades.
 - Execuções têm estados explícitos, histórico de tentativas e política de backoff.
 - A política de retry é copiada para cada execução para preservar previsibilidade.
-- Contratos de repositório não têm implementação nesta etapa.
+- Os contratos de repositório são implementados somente por adaptadores futuros.
+- Os casos de uso coordenam integrações, execuções, idempotência e retentativas sem acoplamento ao transporte HTTP.
 
-Consulte [`docs/domain-design.md`](docs/domain-design.md) para o modelo, regras e fronteiras de segurança.
+Consulte [`docs/domain-design.md`](docs/domain-design.md) e [`docs/application-design.md`](docs/application-design.md) para o modelo, casos de uso, contratos e fronteiras de segurança.
