@@ -1,0 +1,16 @@
+export { Integration } from './entities/Integration.js';
+export { Execution, ExecutionStatus } from './entities/Execution.js';
+export { ProviderKey } from './value-objects/ProviderKey.js';
+export { OperationName } from './value-objects/OperationName.js';
+export { ConfigurationReference } from './value-objects/ConfigurationReference.js';
+export { SecretReference } from './value-objects/SecretReference.js';
+export { IdempotencyKey } from './value-objects/IdempotencyKey.js';
+export { RetryPolicy } from './value-objects/RetryPolicy.js';
+export { IntegrationRepository } from './ports/IntegrationRepository.js';
+export { ExecutionRepository } from './ports/ExecutionRepository.js';
+export { DomainError } from './errors/DomainError.js';
+export { ValidationError } from './errors/ValidationError.js';
+export { BusinessRuleError } from './errors/BusinessRuleError.js';
+export { InvalidStateTransitionError } from './errors/InvalidStateTransitionError.js';
+export { IntegrationInactiveError } from './errors/IntegrationInactiveError.js';
+export { RetryLimitExceededError } from './errors/RetryLimitExceededError.js';

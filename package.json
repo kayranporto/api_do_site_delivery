@@ -1,0 +1,27 @@
+{
+  "name": "generic-integration-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API independente para orquestrar integrações com serviços externos, construída com Arquitetura Hexagonal.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
+    "test:node": "node --test tests/node/domain.test.js",
+    "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
+    "verify:domain": "node ./scripts/verify-domain.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "jest": "^30.0.0",
+    "supertest": "^7.1.4"
+  }
+}
