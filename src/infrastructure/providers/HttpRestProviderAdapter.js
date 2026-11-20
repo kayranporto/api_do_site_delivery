@@ -151,6 +151,15 @@ export class HttpRestProviderAdapter {
       }
     }
 
+    const idempotencyHeaderName = configuration.idempotencyHeaderName;
+    if (command.idempotencyKey && idempotencyHeaderName) {
+      if (typeof idempotencyHeaderName !== 'string' || idempotencyHeaderName.toLowerCase() === 'authorization') {
+        throw new TypeError('idempotencyHeaderName inválido na configuração do provedor.');
+      }
+      validateHeader(idempotencyHeaderName, command.idempotencyKey);
+      headers.set(idempotencyHeaderName, command.idempotencyKey);
+    }
+
     const hasBody = !['GET', 'HEAD'].includes(method) && command.input != null;
     const body = hasBody ? JSON.stringify(command.input) : undefined;
     if (body && Buffer.byteLength(body, 'utf8') > this.#maxRequestBytes) {
@@ -165,7 +174,9 @@ export class HttpRestProviderAdapter {
         headers,
         body,
         redirect: 'manual',
-        signal: AbortSignal.timeout(command.timeoutMs)
+        signal: command.signal
+          ? AbortSignal.any([command.signal, AbortSignal.timeout(command.timeoutMs)])
+          : AbortSignal.timeout(command.timeoutMs)
       });
     } catch (error) {
       const timeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';

@@ -256,3 +256,34 @@ test('HttpRestProviderAdapter converte falha de rede sem propagar mensagem poten
     return true;
   });
 });
+
+
+test('HttpRestProviderAdapter encaminha chave idempotente somente quando configurado', async () => {
+  let captured;
+  const adapter = new HttpRestProviderAdapter({
+    configurationResolver: new MapConfigurationResolver({
+      'config:vendor:default': makeConfig({
+        authentication: null,
+        idempotencyHeaderName: 'X-Idempotency-Key'
+      })
+    }),
+    fetchImpl: async (_url, options) => {
+      captured = options;
+      return jsonResponse({ accepted: true });
+    }
+  });
+
+  await adapter.execute(makeCommand());
+  assert.equal(captured.headers.get('x-idempotency-key'), 'request-12345678');
+});
+
+test('HttpRestProviderAdapter impede chave idempotente de sobrescrever Authorization', async () => {
+  const adapter = new HttpRestProviderAdapter({
+    configurationResolver: new MapConfigurationResolver({
+      'config:vendor:default': makeConfig({ idempotencyHeaderName: 'Authorization' })
+    }),
+    secretResolver: new EnvironmentSecretResolver({ PROVIDER_TOKEN: 'token' }),
+    fetchImpl: async () => jsonResponse({ ok: true })
+  });
+  await assert.rejects(() => adapter.execute(makeCommand()), /idempotencyHeaderName inválido/);
+});

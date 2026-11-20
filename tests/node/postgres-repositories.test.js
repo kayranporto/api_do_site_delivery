@@ -148,3 +148,50 @@ test('PostgresIntegrationRepository persiste e reconstitui o agregado', async ()
   assert.equal(saved.providerKey.value, 'test-provider');
   assert.match(captured.sql, /ON CONFLICT \(id\) DO UPDATE/);
 });
+
+
+test('PostgresExecutionRepository reivindica execuções stale com SKIP LOCKED e grava usando fencing token', async () => {
+  const execution = makeExecution({ id: 'execution-stale-pg', idempotencyKey: null });
+  let call = 0;
+  const captured = [];
+  const pool = {
+    async query(sql, values) {
+      captured.push({ sql, values });
+      call += 1;
+      if (call === 1) return { rows: [{ ...executionRow(execution), lease_token: 'lease-token-001' }] };
+      return { rows: [executionRow(execution)] };
+    }
+  };
+  const repository = new PostgresExecutionRepository({ pool });
+  const cutoff = new Date('2026-05-01T10:05:00.000Z');
+  const now = new Date('2026-05-01T10:06:00.000Z');
+  const claimed = await repository.claimStaleExecutions(cutoff, now, 10, 60_000);
+
+  assert.equal(claimed.length, 1);
+  assert.match(captured[0].sql, /FOR UPDATE SKIP LOCKED/);
+  assert.equal(captured[0].values[0], cutoff);
+  assert.equal(captured[0].values[1], 10);
+  assert.equal(captured[0].values[3], 60_000);
+
+  claimed[0].interrupt(now);
+  await repository.save(claimed[0]);
+  assert.match(captured[1].sql, /WHERE id=\$1 AND lease_token=\$13/);
+  assert.equal(captured[1].values[12], 'lease-token-001');
+});
+
+test('PostgresExecutionRepository recusa updates sem fencing enquanto existe lease', async () => {
+  let captured;
+  const repository = new PostgresExecutionRepository({
+    pool: {
+      async query(sql, values) {
+        captured = { sql, values };
+        return { rows: [] };
+      }
+    }
+  });
+  await assert.rejects(() => repository.save(makeExecution()), (error) => {
+    assert.equal(error.code, 'EXECUTION_LEASE_ACTIVE');
+    return true;
+  });
+  assert.match(captured.sql, /WHERE executions\.lease_token IS NULL/);
+});

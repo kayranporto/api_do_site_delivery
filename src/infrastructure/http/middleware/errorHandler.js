@@ -10,6 +10,9 @@ import { BusinessRuleError } from '../../../domain/errors/BusinessRuleError.js';
 function classifyError(error) {
   if (error instanceof NotFoundError) return { status: 404, code: error.code, message: error.message };
   if (error instanceof IdempotencyConflictError) return { status: 409, code: error.code, message: error.message };
+  if (error?.code === 'EXECUTION_LEASE_ACTIVE' || error?.code === 'EXECUTION_LEASE_LOST') {
+    return { status: 409, code: error.code, message: 'A execução está sendo processada por outro worker.' };
+  }
   if (error instanceof ProviderNotFoundError) return { status: 503, code: error.code, message: 'O provedor solicitado não está disponível.' };
   if (error instanceof InvalidProviderAdapterError) return { status: 500, code: error.code, message: 'A configuração interna do provedor é inválida.' };
   if (error instanceof ValidationError) return { status: 400, code: error.code, message: error.message };

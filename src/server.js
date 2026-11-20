@@ -25,7 +25,9 @@ export async function buildHttpApplication({ config = loadConfig(), container } 
 
     activeContainer = createContainer({
       providerConfigurations: config.providerConfigurations,
-      repositories: repositories ?? {}
+      repositories: repositories ?? {},
+      executionLeaseMs: config.workerLeaseMs,
+      staleAfterMs: config.workerStaleAfterMs
     });
   }
 

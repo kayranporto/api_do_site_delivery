@@ -1,7 +1,17 @@
 import { readFile } from 'node:fs/promises';
 
-export const POSTGRES_SCHEMA_VERSION = '001_initial_schema';
+export const POSTGRES_SCHEMA_VERSION = '002_execution_interrupted';
 const MIGRATION_LOCK_ID = '520260519';
+const MIGRATIONS = [
+  {
+    version: '001_initial_schema',
+    file: '../../../database/migrations/001_initial_schema.sql'
+  },
+  {
+    version: '002_execution_interrupted',
+    file: '../../../database/migrations/002_execution_interrupted.sql'
+  }
+];
 
 export async function runMigrations(pool) {
   if (!pool || typeof pool.connect !== 'function') {
@@ -9,6 +19,7 @@ export async function runMigrations(pool) {
   }
 
   const client = await pool.connect();
+  const appliedVersions = [];
   try {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_ID]);
@@ -16,27 +27,32 @@ export async function runMigrations(pool) {
       'CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())'
     );
 
-    const applied = await client.query(
-      'SELECT version FROM schema_migrations WHERE version = $1',
-      [POSTGRES_SCHEMA_VERSION]
-    );
-    if (applied.rows.length > 0) {
-      await client.query('COMMIT');
-      return { version: POSTGRES_SCHEMA_VERSION, applied: false };
+    for (const migration of MIGRATIONS) {
+      const applied = await client.query(
+        'SELECT version FROM schema_migrations WHERE version = $1',
+        [migration.version]
+      );
+      if (applied.rows.length > 0) continue;
+
+      const migrationUrl = new URL(migration.file, import.meta.url);
+      const migrationSql = await readFile(migrationUrl, 'utf8');
+      await client.query(migrationSql);
+      await client.query(
+        'INSERT INTO schema_migrations (version) VALUES ($1)',
+        [migration.version]
+      );
+      appliedVersions.push(migration.version);
     }
 
-    const migrationUrl = new URL('../../../database/migrations/001_initial_schema.sql', import.meta.url);
-    const migrationSql = await readFile(migrationUrl, 'utf8');
-    await client.query(migrationSql);
-    await client.query(
-      'INSERT INTO schema_migrations (version) VALUES ($1)',
-      [POSTGRES_SCHEMA_VERSION]
-    );
     await client.query('COMMIT');
-    return { version: POSTGRES_SCHEMA_VERSION, applied: true };
+    return {
+      version: POSTGRES_SCHEMA_VERSION,
+      applied: appliedVersions.length > 0,
+      appliedVersions
+    };
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch { /* preserva o erro original */ }
-    throw new Error('Não foi possível aplicar a migration PostgreSQL.', { cause: error });
+    throw new Error('Não foi possível aplicar as migrations PostgreSQL.', { cause: error });
   } finally {
     client.release();
   }

@@ -13,10 +13,11 @@ export const ExecutionStatus = Object.freeze({
   RETRY_SCHEDULED: 'retry_scheduled',
   SUCCEEDED: 'succeeded',
   FAILED: 'failed',
-  CANCELLED: 'cancelled'
+  CANCELLED: 'cancelled',
+  INTERRUPTED: 'interrupted'
 });
 
-const FINAL_STATUSES = new Set([ExecutionStatus.SUCCEEDED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED]);
+const FINAL_STATUSES = new Set([ExecutionStatus.SUCCEEDED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED, ExecutionStatus.INTERRUPTED]);
 
 function asDate(value, fieldName) {
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
@@ -204,6 +205,11 @@ export class Execution {
           return Boolean((restoredAttempts.length === 0 || (last?.status === 'failed' && previousAttemptsFailed))
             && completed && completed >= execution.#createdAt
             && (!last || completed >= last.endedAt) && next === null);
+        case ExecutionStatus.INTERRUPTED:
+          return Boolean((restoredAttempts.length === 0 && completed && completed >= execution.#createdAt)
+            || (last?.status === 'failed' && last.errorCode === 'EXECUTION_INTERRUPTED'
+              && previousAttemptsFailed && completed
+              && completed.getTime() === last.endedAt.getTime())) && next === null;
         default:
           return false;
       }
@@ -285,6 +291,29 @@ export class Execution {
       this.#status = ExecutionStatus.FAILED;
     }
 
+    return this;
+  }
+
+  interrupt(at = new Date()) {
+    const interruptedAt = asDate(at, 'interruptedAt');
+    if (![ExecutionStatus.PENDING, ExecutionStatus.RUNNING].includes(this.#status)) {
+      throw new InvalidStateTransitionError(this.#status, 'interrupt');
+    }
+    if (interruptedAt < this.#createdAt) {
+      throw new ValidationError('interruptedAt não pode ser anterior a createdAt.');
+    }
+    if (this.#status === ExecutionStatus.RUNNING) {
+      const attempt = this.#currentRunningAttempt('interrupt');
+      if (interruptedAt < attempt.startedAt) {
+        throw new ValidationError('interruptedAt não pode ser anterior a startedAt.');
+      }
+      attempt.status = 'failed';
+      attempt.endedAt = interruptedAt;
+      attempt.errorCode = 'EXECUTION_INTERRUPTED';
+    }
+    this.#status = ExecutionStatus.INTERRUPTED;
+    this.#nextAttemptAt = null;
+    this.#completedAt = interruptedAt;
     return this;
   }
 

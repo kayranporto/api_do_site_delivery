@@ -7,7 +7,8 @@ import {
   GetExecution,
   GetIntegration,
   ListActiveIntegrations,
-  RetryDueExecutions
+  RetryDueExecutions,
+  RecoverStaleExecutions
 } from '../application/index.js';
 import {
   EnvironmentSecretResolver,
@@ -25,7 +26,9 @@ export function createContainer({
   providerConfigurations = {},
   environment = process.env,
   fetchImpl = globalThis.fetch,
-  repositories = {}
+  repositories = {},
+  executionLeaseMs = 180_000,
+  staleAfterMs = 300_000
 } = {}) {
   const integrationRepository = repositories.integration ?? new InMemoryIntegrationRepository();
   const executionRepository = repositories.execution ?? new InMemoryExecutionRepository();
@@ -54,7 +57,8 @@ export function createContainer({
     executionRepository,
     providerRegistry,
     clock,
-    idGenerator
+    idGenerator,
+    leaseMs: executionLeaseMs
   };
 
   const useCases = {
@@ -66,7 +70,13 @@ export function createContainer({
     executeOperation: new ExecuteOperation(dependencies),
     retryDueExecutions: new RetryDueExecutions(dependencies),
     cancelExecution: new CancelExecution(dependencies),
-    getExecution: new GetExecution({ executionRepository })
+    getExecution: new GetExecution({ executionRepository }),
+    recoverStaleExecutions: new RecoverStaleExecutions({
+      executionRepository,
+      clock,
+      staleAfterMs,
+      leaseMs: executionLeaseMs
+    })
   };
 
   return {

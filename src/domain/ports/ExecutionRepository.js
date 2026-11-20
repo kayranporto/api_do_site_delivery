@@ -20,7 +20,19 @@ export class ExecutionRepository {
     throw new Error('ExecutionRepository.findDueForRetry deve ser implementado por um adaptador.');
   }
 
+  async acquireLease(_execution, _leaseMs) {
+    throw new Error('ExecutionRepository.acquireLease deve ser implementado por um adaptador.');
+  }
+
+  async renewLease(_execution, _leaseMs) {
+    throw new Error('ExecutionRepository.renewLease deve ser implementado por um adaptador.');
+  }
+
   async claimDueForRetry(_now, _limit, _leaseMs) {
     throw new Error('ExecutionRepository.claimDueForRetry deve ser implementado por um adaptador.');
+  }
+
+  async claimStaleExecutions(_cutoff, _now, _limit, _leaseMs) {
+    throw new Error('ExecutionRepository.claimStaleExecutions deve ser implementado por um adaptador.');
   }
 }

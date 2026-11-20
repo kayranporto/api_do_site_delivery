@@ -30,7 +30,7 @@ Regras: começa inativa; só pode ser ativada explicitamente; timeout deve ficar
 
 Campos principais: `id`, `integrationId`, `operationName`, `input`, `idempotencyKey`, `retryPolicy`, `status`, `attempts`, `nextAttemptAt`, `completedAt` e `createdAt`.
 
-Comportamentos: `startAttempt`, `succeed`, `fail` e `cancel`.
+Comportamentos: `startAttempt`, `succeed`, `fail`, `cancel` e `interrupt`.
 
 A política de repetição é copiada para a execução no momento de sua criação. Assim, uma alteração posterior na integração não muda silenciosamente o comportamento de uma execução já iniciada.
 
@@ -61,6 +61,7 @@ retry_scheduled -------------------> cancelled
 - `running` pode terminar em `succeeded`, `failed` ou `retry_scheduled`.
 - Uma execução em estado final não pode ser retomada.
 - `cancelled` só é permitido antes de uma tentativa estar em andamento.
+- `interrupted` é um estado final aplicado pelo processo de recuperação a execuções pendentes ou em andamento consideradas abandonadas; uma tentativa em andamento é encerrada com o código `EXECUTION_INTERRUPTED` e não é repetida automaticamente.
 - Erros são persistidos como códigos curtos, não mensagens potencialmente sensíveis.
 
 ## Serviços de domínio

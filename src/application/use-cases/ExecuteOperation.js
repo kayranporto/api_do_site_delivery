@@ -30,12 +30,13 @@ function replayOrConflict(existing, candidate, integrationId) {
 }
 
 export class ExecuteOperation {
-  constructor({ integrationRepository, executionRepository, providerRegistry, idGenerator, clock }) {
+  constructor({ integrationRepository, executionRepository, providerRegistry, idGenerator, clock, leaseMs = 180_000 }) {
     this.integrationRepository = integrationRepository;
     this.executionRepository = executionRepository;
     this.providerRegistry = providerRegistry;
     this.idGenerator = idGenerator;
     this.clock = clock;
+    this.leaseMs = leaseMs;
   }
 
   async execute(input) {
@@ -79,12 +80,23 @@ export class ExecuteOperation {
       return replayOrConflict(reservation.execution, execution, integration.id);
     }
 
+    let activeExecution = reservation.execution;
+    if (typeof this.executionRepository.acquireLease === 'function') {
+      const acquired = await this.executionRepository.acquireLease(activeExecution, this.leaseMs ?? 180_000);
+      if (!acquired) {
+        const current = await this.executionRepository.findById(activeExecution.id);
+        if (current) return replayOrConflict(current, execution, integration.id);
+        throw new Error('Não foi possível adquirir o lease da execução.');
+      }
+    }
+
     const outcome = await executeProviderAttempt({
-      execution,
+      execution: activeExecution,
       integration,
       adapter,
       executionRepository: this.executionRepository,
-      clock: this.clock
+      clock: this.clock,
+      leaseMs: this.leaseMs ?? 180_000
     });
 
     return { ...outcome, replayed: false };

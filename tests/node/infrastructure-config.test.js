@@ -16,6 +16,10 @@ test('loadConfig valida token, porta, CORS e configurações de persistência', 
   assert.equal(config.databaseUrl, null);
   assert.equal(config.databasePoolMax, 10);
   assert.equal(config.nodeEnv, 'development');
+  assert.equal(config.workerIntervalMs, 5000);
+  assert.equal(config.workerBatchSize, 20);
+  assert.equal(config.workerStaleAfterMs, 300000);
+  assert.equal(config.workerLeaseMs, 180000);
 
   assert.throws(() => loadConfig({ API_ACCESS_TOKEN: 'short' }), /pelo menos 32 caracteres/);
   assert.throws(() => loadConfig({ API_ACCESS_TOKEN: 'x'.repeat(40), PORT: '70000' }), /PORT/);
@@ -32,6 +36,8 @@ test('loadConfig valida token, porta, CORS e configurações de persistência', 
     API_ACCESS_TOKEN: 'x'.repeat(40),
     NODE_ENV: 'production'
   }), /DATABASE_URL é obrigatório/);
+
+  assert.throws(() => loadConfig({ API_ACCESS_TOKEN: 'x'.repeat(40), WORKER_BATCH_SIZE: '101' }), /WORKER_BATCH_SIZE/);
 
   const postgres = loadConfig({
     API_ACCESS_TOKEN: 'x'.repeat(40),

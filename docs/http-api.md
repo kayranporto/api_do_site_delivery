@@ -70,7 +70,7 @@ Idempotency-Key: operation-2026-000001
 
 ## Configuração de provedor
 
-`PROVIDER_CONFIG_JSON` é um objeto cujas chaves são referências de configuração. Cada entrada define `providerKey`, `baseUrl`, `allowedHosts` e operações explicitamente mapeadas. Não coloque credenciais nele; configure a referência `env:...` e mantenha o segredo na variável de ambiente correspondente.
+`PROVIDER_CONFIG_JSON` é um objeto cujas chaves são referências de configuração. Cada entrada define `providerKey`, `baseUrl`, `allowedHosts` e operações explicitamente mapeadas. Para encaminhar uma chave de idempotência ao serviço externo via REST, defina opcionalmente `idempotencyHeaderName` (por exemplo, `Idempotency-Key`); o adaptador não envia a chave a provedores que não tenham essa opção configurada. Não coloque credenciais nele; configure a referência `env:...` e mantenha o segredo na variável de ambiente correspondente.
 
 ## Limitações antes de produção
 

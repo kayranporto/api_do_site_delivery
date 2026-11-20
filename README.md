@@ -4,13 +4,24 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP) e 5 (Persistência PostgreSQL) implementadas. O projeto ainda **não está pronto para produção**: falta o worker/scheduler automático e a reconciliação de execuções interrompidas; também são necessários controles operacionais específicos do ambiente.
+Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL) e 6 (Worker e recuperação) implementadas. O projeto ainda **não está pronto para produção**: falta reconciliação operacional dos resultados externos incertos e observabilidade avançada; também são necessários controles operacionais específicos do ambiente.
 
 ## Instalação e execução
 
 Requer Node.js 20 ou superior. Execute **npm install**, copie **.env.example** para **.env**, configure um API_ACCESS_TOKEN aleatório com pelo menos 32 caracteres e inicie com **npm start**.
 
 Sem DATABASE_URL, o modo local usa repositórios em memória e perde os dados ao reiniciar.
+
+## Worker e retries automáticos
+
+Com PostgreSQL configurado e o schema atualizado, execute o worker em processo separado:
+
+- **npm run worker** inicia o polling contínuo.
+- **npm run worker:once** executa um ciclo e encerra.
+
+O worker recupera execuções antigas e processa retries vencidos. Ele aguarda o ciclo ativo antes de fechar conexões ao receber SIGINT ou SIGTERM. As variáveis WORKER_* configuram intervalo, lotes, limite de antiguidade e lease; consulte docs/worker-design.md.
+
+Execuções interrompidas ficam em estado **interrupted** e exigem reconciliação. Elas não são repetidas automaticamente porque o provedor externo pode ter concluído a operação antes da queda.
 
 ## PostgreSQL
 

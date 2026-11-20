@@ -26,9 +26,15 @@ A mesma chave com operação ou payload diferente resulta em conflito HTTP 409. 
 
 ## Reivindicação de retries
 
-O repositório reivindica retries vencidos em uma única instrução com FOR UPDATE SKIP LOCKED e um lease de 180 segundos. Ao salvar o estado atualizado da execução, o lease é liberado. Se o processo cair antes de iniciar a tentativa, o lease expira e outra instância pode reivindicar a execução.
+O repositório reivindica retries vencidos em uma única instrução com FOR UPDATE SKIP LOCKED e um lease configurável. O lease é mantido durante a chamada externa e renovado em segundo plano. Um fencing token vinculado ao objeto de execução impede que um worker com lease substituído grave um estado obsoleto.
 
 O lease evita que workers saudáveis executem simultaneamente a mesma tentativa. Ele não transforma chamadas HTTP externas em operações exactly-once: uma falha de processo depois de o provedor aceitar a requisição, mas antes de a aplicação persistir o sucesso, pode exigir repetição. Para evitar efeitos duplicados, o provedor externo também precisa respeitar a chave de idempotência recebida.
+
+## Etapa 6 — Worker
+
+O processo separado `npm run worker` executa a recuperação de execuções abandonadas e os retries vencidos. `npm run worker:once` executa um único ciclo. Os detalhes de agendamento, leases, fencing e desligamento estão em [worker-design.md](worker-design.md).
+
+A migration `002_execution_interrupted` inclui o estado final `interrupted` e o índice de recuperação. O migrador aplica versões pendentes em ordem, sob transação e advisory lock.
 
 ## Limites atuais
 
