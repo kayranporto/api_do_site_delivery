@@ -53,11 +53,20 @@ export class PostgresExecutionRepository extends ExecutionRepository {
   async save(execution, { releaseLease = true } = {}) {
     const token = this.#leaseOwners.get(execution);
     if (token) {
-      const sql = 'UPDATE executions SET operation_name=$3, input=$4::jsonb, retry_policy=$6::jsonb, ' +
-        'status=$7, attempt_count=$8, attempts=$9::jsonb, next_attempt_at=$10, completed_at=$11, ' +
-        'lease_token=' + (releaseLease ? 'NULL' : '$13') + ', lease_until=' +
-        (releaseLease ? 'NULL' : 'lease_until') + ' WHERE id=$1 AND lease_token=$13 RETURNING *';
-      const result = await this.pool.query(sql, [...valuesFor(execution), token]);
+      const r = execution.toJSON();
+      const values = [
+        r.id, r.operationName, JSON.stringify(r.input), JSON.stringify(r.retryPolicy),
+        r.status, r.attempts.length, JSON.stringify(r.attempts), r.nextAttemptAt,
+        r.completedAt, releaseLease, token
+      ];
+      const sql = [
+        'UPDATE executions SET operation_name=$2, input=$3::jsonb, retry_policy=$4::jsonb,',
+        'status=$5, attempt_count=$6, attempts=$7::jsonb, next_attempt_at=$8, completed_at=$9,',
+        'lease_token=CASE WHEN $10::boolean THEN NULL ELSE $11 END,',
+        'lease_until=CASE WHEN $10::boolean THEN NULL ELSE lease_until END',
+        'WHERE id=$1 AND lease_token=$11 RETURNING *'
+      ].join(' ');
+      const result = await this.pool.query(sql, values);
       if (!result.rows[0]) throw fail('EXECUTION_LEASE_LOST', 'O lease da execução foi perdido.');
       if (releaseLease) this.#leaseOwners.delete(execution);
       return reconstitute(result.rows[0]);

@@ -76,7 +76,7 @@ test('PostgresExecutionRepository resolve conflito idempotente por leitura após
     async query(sql, values) {
       queries.push({ sql, values });
       if (sql.includes('ON CONFLICT (integration_id, idempotency_key)')) return { rows: [] };
-      if (sql.includes('SELECT * FROM executions WHERE integration_id = $1')) {
+      if (sql.includes('FROM executions WHERE integration_id')) {
         return { rows: [executionRow(existing)] };
       }
       throw new Error('Consulta inesperada no teste.');
@@ -175,8 +175,8 @@ test('PostgresExecutionRepository reivindica execuções stale com SKIP LOCKED e
 
   claimed[0].interrupt(now);
   await repository.save(claimed[0]);
-  assert.match(captured[1].sql, /WHERE id=\$1 AND lease_token=\$13/);
-  assert.equal(captured[1].values[12], 'lease-token-001');
+  assert.match(captured[1].sql, /WHERE id=\$1 AND lease_token=\$11/);
+  assert.equal(captured[1].values[10], 'lease-token-001');
 });
 
 test('PostgresExecutionRepository recusa updates sem fencing enquanto existe lease', async () => {
