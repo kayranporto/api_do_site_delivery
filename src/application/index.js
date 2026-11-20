@@ -15,3 +15,4 @@ export { IdempotencyConflictError } from './errors/IdempotencyConflictError.js';
 export { ProviderNotFoundError } from './errors/ProviderNotFoundError.js';
 export { InvalidProviderAdapterError } from './errors/InvalidProviderAdapterError.js';
 export { ProviderExecutionError } from './errors/ProviderExecutionError.js';
+export { GetExecution } from './use-cases/GetExecution.js';

@@ -6,3 +6,4 @@ export { MapProviderRegistry } from './providers/MapProviderRegistry.js';
 export { HttpRestProviderAdapter } from './providers/HttpRestProviderAdapter.js';
 export { SystemClock } from './system/SystemClock.js';
 export { UuidGenerator } from './system/UuidGenerator.js';
+export { loadConfig } from './configuration/loadConfig.js';

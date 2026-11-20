@@ -1,0 +1,77 @@
+import {
+  ActivateIntegration,
+  CancelExecution,
+  CreateIntegration,
+  DeactivateIntegration,
+  ExecuteOperation,
+  GetExecution,
+  GetIntegration,
+  ListActiveIntegrations,
+  RetryDueExecutions
+} from '../application/index.js';
+import {
+  EnvironmentSecretResolver,
+  HttpRestProviderAdapter,
+  InMemoryExecutionRepository,
+  InMemoryIntegrationRepository,
+  MapConfigurationResolver,
+  MapProviderRegistry,
+  SystemClock,
+  UuidGenerator
+} from '../infrastructure/index.js';
+
+/** Composition root. Por padrão usa memória: adequado apenas para desenvolvimento local. */
+export function createContainer({
+  providerConfigurations = {},
+  environment = process.env,
+  fetchImpl = globalThis.fetch,
+  repositories = {}
+} = {}) {
+  const integrationRepository = repositories.integration ?? new InMemoryIntegrationRepository();
+  const executionRepository = repositories.execution ?? new InMemoryExecutionRepository();
+  const clock = new SystemClock();
+  const idGenerator = new UuidGenerator();
+  const configurationResolver = new MapConfigurationResolver(providerConfigurations);
+  const secretResolver = new EnvironmentSecretResolver(environment);
+  const providerRegistry = new MapProviderRegistry();
+
+  const registeredProviders = new Set();
+  for (const configuration of Object.values(providerConfigurations)) {
+    if (!configuration || typeof configuration.providerKey !== 'string') {
+      throw new Error('Cada configuração de provedor precisa declarar providerKey.');
+    }
+    if (registeredProviders.has(configuration.providerKey)) continue;
+    providerRegistry.register(configuration.providerKey, new HttpRestProviderAdapter({
+      configurationResolver,
+      secretResolver,
+      fetchImpl
+    }));
+    registeredProviders.add(configuration.providerKey);
+  }
+
+  const dependencies = {
+    integrationRepository,
+    executionRepository,
+    providerRegistry,
+    clock,
+    idGenerator
+  };
+
+  const useCases = {
+    createIntegration: new CreateIntegration(dependencies),
+    activateIntegration: new ActivateIntegration(dependencies),
+    deactivateIntegration: new DeactivateIntegration(dependencies),
+    getIntegration: new GetIntegration(dependencies),
+    listActiveIntegrations: new ListActiveIntegrations(dependencies),
+    executeOperation: new ExecuteOperation(dependencies),
+    retryDueExecutions: new RetryDueExecutions(dependencies),
+    cancelExecution: new CancelExecution(dependencies),
+    getExecution: new GetExecution({ executionRepository })
+  };
+
+  return {
+    repositories: { integrationRepository, executionRepository },
+    adapters: { providerRegistry, configurationResolver, secretResolver, clock, idGenerator },
+    useCases
+  };
+}
