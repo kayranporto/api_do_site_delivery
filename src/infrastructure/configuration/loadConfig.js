@@ -6,6 +6,14 @@ function parsePort(value) {
   return port;
 }
 
+function parsePoolMax(value) {
+  const max = Number(value ?? 10);
+  if (!Number.isInteger(max) || max < 1 || max > 50) {
+    throw new Error('DATABASE_POOL_MAX deve ser um número inteiro entre 1 e 50.');
+  }
+  return max;
+}
+
 function parseProviderConfigurations(value) {
   if (!value) return {};
   let parsed;
@@ -18,6 +26,16 @@ function parseProviderConfigurations(value) {
     throw new Error('PROVIDER_CONFIG_JSON deve conter um objeto JSON.');
   }
   return parsed;
+}
+
+function parseDatabaseUrl(value) {
+  if (value == null || value.trim() === '') return null;
+  let parsed;
+  try { parsed = new URL(value); } catch { throw new Error('DATABASE_URL deve ser uma URL PostgreSQL válida.'); }
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname) {
+    throw new Error('DATABASE_URL deve usar o protocolo postgres:// ou postgresql://.');
+  }
+  return value;
 }
 
 export function loadConfig(environment = process.env) {
@@ -40,11 +58,20 @@ export function loadConfig(environment = process.env) {
     }
   }
 
+  const databaseUrl = parseDatabaseUrl(environment.DATABASE_URL);
+  const nodeEnv = environment.NODE_ENV ?? 'development';
+  if (nodeEnv === 'production' && !databaseUrl) {
+    throw new Error('DATABASE_URL é obrigatório em NODE_ENV=production.');
+  }
+
   return {
     host: environment.HOST ?? '127.0.0.1',
     port: parsePort(environment.PORT),
     apiAccessToken,
     corsOrigins,
-    providerConfigurations: parseProviderConfigurations(environment.PROVIDER_CONFIG_JSON)
+    providerConfigurations: parseProviderConfigurations(environment.PROVIDER_CONFIG_JSON),
+    databaseUrl,
+    databasePoolMax: parsePoolMax(environment.DATABASE_POOL_MAX),
+    nodeEnv
   };
 }

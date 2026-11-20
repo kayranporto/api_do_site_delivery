@@ -33,6 +33,15 @@ class MemoryIntegrationRepository {
 class MemoryExecutionRepository {
   items = new Map();
   async save(execution) { this.items.set(execution.id, execution); return execution; }
+  async createIfAbsent(execution) {
+    const key = execution.idempotencyKey?.value;
+    const existing = key == null ? null : [...this.items.values()].find((item) => (
+      item.integrationId === execution.integrationId && item.idempotencyKey?.value === key
+    ));
+    if (existing) return { execution: existing, created: false };
+    this.items.set(execution.id, execution);
+    return { execution, created: true };
+  }
   async findById(id) { return this.items.get(id) ?? null; }
   async findByIdempotencyKey(integrationId, key) {
     return [...this.items.values()].find((item) => item.integrationId === integrationId
@@ -58,7 +67,7 @@ class FakeClock {
 
 class FakeIdGenerator {
   next = 0;
-  generate() { this.next += 1; return `generated-${this.next}`; }
+  generate() { this.next += 1; return 'generated-' + this.next; }
 }
 
 class FakeProviderRegistry {

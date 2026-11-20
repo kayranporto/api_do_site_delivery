@@ -7,9 +7,10 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand && npm run test:node",
-    "test:node": "node --test tests/node/domain.test.js tests/node/application.test.js tests/node/infrastructure.test.js tests/node/application-stage4.test.js tests/node/infrastructure-config.test.js",
+    "test:node": "node --test tests/node/domain.test.js tests/node/application.test.js tests/node/infrastructure.test.js tests/node/application-stage4.test.js tests/node/infrastructure-config.test.js tests/node/postgres-repositories.test.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "verify:domain": "node ./scripts/verify-domain.mjs",
+    "db:migrate": "node ./scripts/migrate-postgres.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"
   },
@@ -18,6 +19,7 @@
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "pg": "^8.23.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {

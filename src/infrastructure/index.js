@@ -1,5 +1,9 @@
 export { InMemoryIntegrationRepository } from './repositories/InMemoryIntegrationRepository.js';
 export { InMemoryExecutionRepository } from './repositories/InMemoryExecutionRepository.js';
+export { PostgresIntegrationRepository } from './repositories/PostgresIntegrationRepository.js';
+export { PostgresExecutionRepository } from './repositories/PostgresExecutionRepository.js';
+export { createPostgresPersistence } from './postgres/createPostgresPersistence.js';
+export { runMigrations, migratePostgresDatabase, POSTGRES_SCHEMA_VERSION } from './postgres/runMigrations.js';
 export { MapConfigurationResolver, ConfigurationNotFoundError } from './configuration/MapConfigurationResolver.js';
 export { EnvironmentSecretResolver, SecretNotFoundError, InvalidSecretReferenceError } from './secrets/EnvironmentSecretResolver.js';
 export { MapProviderRegistry } from './providers/MapProviderRegistry.js';

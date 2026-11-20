@@ -12,9 +12,9 @@ function stableJson(value) {
     if (serialized === undefined) throw new TypeError('Payload não pode ser serializado como JSON.');
     return serialized;
   }
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']';
   const keys = Object.keys(value).sort();
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  return '{' + keys.map((key) => JSON.stringify(key) + ':' + stableJson(value[key])).join(',') + '}';
 }
 
 function sameCommand(existing, candidate) {
@@ -51,23 +51,20 @@ export class ExecuteOperation {
       createdAt: this.clock.now()
     });
 
-    if (idempotencyKey) {
-      const existing = await this.executionRepository.findByIdempotencyKey(
-        integration.id,
-        idempotencyKey.value
-      );
-      if (existing) {
-        if (!sameCommand(existing, execution)) {
-          throw new IdempotencyConflictError(integration.id);
-        }
-        return { execution: existing, result: null, replayed: true };
-      }
-    }
-
     const providerKey = integration.providerKey.value;
     const adapter = await this.providerRegistry.resolve(providerKey);
     if (!adapter || typeof adapter.execute !== 'function') {
       throw new InvalidProviderAdapterError(providerKey);
+    }
+
+    // Reserva a chave e persiste o estado pending antes de qualquer efeito externo.
+    // No PostgreSQL, createIfAbsent é uma única operação protegida pelo índice UNIQUE.
+    const reservation = await this.executionRepository.createIfAbsent(execution);
+    if (!reservation.created) {
+      if (!sameCommand(reservation.execution, execution)) {
+        throw new IdempotencyConflictError(integration.id);
+      }
+      return { execution: reservation.execution, result: null, replayed: true };
     }
 
     const outcome = await executeProviderAttempt({

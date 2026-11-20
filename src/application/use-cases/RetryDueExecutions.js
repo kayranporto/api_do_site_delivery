@@ -2,12 +2,15 @@ import { ExecutionStatus } from '../../domain/entities/Execution.js';
 import { InvalidProviderAdapterError } from '../errors/InvalidProviderAdapterError.js';
 import { executeProviderAttempt } from '../services/executeProviderAttempt.js';
 
+const DEFAULT_LEASE_MS = 180_000;
+
 export class RetryDueExecutions {
-  constructor({ integrationRepository, executionRepository, providerRegistry, clock }) {
+  constructor({ integrationRepository, executionRepository, providerRegistry, clock, leaseMs = DEFAULT_LEASE_MS }) {
     this.integrationRepository = integrationRepository;
     this.executionRepository = executionRepository;
     this.providerRegistry = providerRegistry;
     this.clock = clock;
+    this.leaseMs = leaseMs;
   }
 
   async execute({ limit = 20 } = {}) {
@@ -16,7 +19,9 @@ export class RetryDueExecutions {
     }
 
     const queriedAt = this.clock.now();
-    const dueExecutions = await this.executionRepository.findDueForRetry(queriedAt, limit);
+    const dueExecutions = typeof this.executionRepository.claimDueForRetry === 'function'
+      ? await this.executionRepository.claimDueForRetry(queriedAt, limit, this.leaseMs)
+      : await this.executionRepository.findDueForRetry(queriedAt, limit);
     const results = [];
 
     for (const execution of dueExecutions) {
