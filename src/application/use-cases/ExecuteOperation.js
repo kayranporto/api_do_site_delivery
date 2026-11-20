@@ -22,6 +22,13 @@ function sameCommand(existing, candidate) {
     && stableJson(existing.input) === stableJson(candidate.input);
 }
 
+function replayOrConflict(existing, candidate, integrationId) {
+  if (!sameCommand(existing, candidate)) {
+    throw new IdempotencyConflictError(integrationId);
+  }
+  return { execution: existing, result: null, replayed: true };
+}
+
 export class ExecuteOperation {
   constructor({ integrationRepository, executionRepository, providerRegistry, idGenerator, clock }) {
     this.integrationRepository = integrationRepository;
@@ -51,20 +58,25 @@ export class ExecuteOperation {
       createdAt: this.clock.now()
     });
 
+    // Atalho para replay: não exige que o adaptador do provedor ainda esteja disponível.
+    if (idempotencyKey) {
+      const existing = await this.executionRepository.findByIdempotencyKey(
+        integration.id,
+        idempotencyKey.value
+      );
+      if (existing) return replayOrConflict(existing, execution, integration.id);
+    }
+
     const providerKey = integration.providerKey.value;
     const adapter = await this.providerRegistry.resolve(providerKey);
     if (!adapter || typeof adapter.execute !== 'function') {
       throw new InvalidProviderAdapterError(providerKey);
     }
 
-    // Reserva a chave e persiste o estado pending antes de qualquer efeito externo.
-    // No PostgreSQL, createIfAbsent é uma única operação protegida pelo índice UNIQUE.
+    // A reserva atômica fecha a corrida entre o atalho acima e o início do efeito externo.
     const reservation = await this.executionRepository.createIfAbsent(execution);
     if (!reservation.created) {
-      if (!sameCommand(reservation.execution, execution)) {
-        throw new IdempotencyConflictError(integration.id);
-      }
-      return { execution: reservation.execution, result: null, replayed: true };
+      return replayOrConflict(reservation.execution, execution, integration.id);
     }
 
     const outcome = await executeProviderAttempt({

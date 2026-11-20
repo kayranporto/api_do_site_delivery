@@ -178,7 +178,20 @@ test('ExecuteOperation devolve execução existente sem repetir efeito idempoten
   assert.equal(first.execution.id, second.execution.id);
   assert.equal(second.replayed, true);
   assert.equal(providerCalls, 1);
-  await assert.rejects(() => useCase.execute({ ...command, payload: { title: 'Different command' } }), IdempotencyConflictError);
+
+  const unavailableProvider = new FakeProviderRegistry();
+  const replayWithoutProvider = await new ExecuteOperation({
+    ...context,
+    providerRegistry: unavailableProvider
+  }).execute(command);
+  assert.equal(replayWithoutProvider.execution.id, first.execution.id);
+  assert.equal(replayWithoutProvider.replayed, true);
+
+  await assert.rejects(
+    () => new ExecuteOperation({ ...context, providerRegistry: unavailableProvider })
+      .execute({ ...command, payload: { title: 'Different command' } }),
+    IdempotencyConflictError
+  );
   assert.equal(providerCalls, 1);
 });
 
