@@ -4,7 +4,7 @@ Base independente para uma API que intermediará operações com serviços exter
 
 ## Estado do projeto
 
-As etapas **1 — Domain** e **2 — Application** foram implementadas. Ainda não há servidor Express, rotas HTTP, banco, conectores reais de provedores, autenticação ou deploy.
+As etapas **1 — Domain**, **2 — Application** e **3 — Infrastructure** foram implementadas. Ainda não há servidor Express, rotas HTTP, banco de produção, autenticação ou deploy.
 
 ## Requisitos
 
@@ -26,10 +26,10 @@ npm run verify:domain
 ## Testes automatizados
 
 ```bash
-# Suítes Jest e testes nativos do Node.js (após npm install)
+# Suíte Jest (após npm install)
 npm test
 
-# Testes executáveis sem instalar dependências externas
+# Verificação executável sem instalar dependências
 npm run test:node
 ```
 
@@ -43,11 +43,18 @@ src/
 │   ├── ports/
 │   ├── value-objects/
 │   └── index.js
-└── application/
-    ├── errors/
-    ├── ports/
-    ├── services/
-    ├── use-cases/
+├── application/
+│   ├── errors/
+│   ├── ports/
+│   ├── services/
+│   ├── use-cases/
+│   └── index.js
+└── infrastructure/
+    ├── configuration/
+    ├── providers/
+    ├── repositories/
+    ├── secrets/
+    ├── system/
     └── index.js
 
 tests/
@@ -56,11 +63,14 @@ tests/
 │   └── domain/
 └── node/
     ├── application.test.js
-    └── domain.test.js
+    ├── domain.test.js
+    ├── application.test.js
+    └── infrastructure.test.js
 
 docs/
 ├── application-design.md
-└── domain-design.md
+├── domain-design.md
+└── infrastructure-design.md
 ```
 
 ## Decisões importantes
@@ -72,5 +82,6 @@ docs/
 - A política de retry é copiada para cada execução para preservar previsibilidade.
 - Os contratos de repositório são implementados somente por adaptadores futuros.
 - Os casos de uso coordenam integrações, execuções, idempotência e retentativas sem acoplamento ao transporte HTTP.
+- Os adaptadores de infraestrutura concretos incluem memória (somente desenvolvimento/testes), registro de provedores, REST genérico, relógio, UUID, configuração e resolução de segredos via ambiente.
 
-Consulte [`docs/domain-design.md`](docs/domain-design.md) e [`docs/application-design.md`](docs/application-design.md) para o modelo, casos de uso, contratos e fronteiras de segurança.
+Consulte [`docs/domain-design.md`](docs/domain-design.md), [`docs/application-design.md`](docs/application-design.md) e [`docs/infrastructure-design.md`](docs/infrastructure-design.md) para o modelo, casos de uso, adaptadores e fronteiras de segurança.
