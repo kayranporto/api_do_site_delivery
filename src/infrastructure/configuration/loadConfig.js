@@ -57,6 +57,8 @@ export function loadConfig(environment = process.env) {
     providerConfigurations: parseProviderConfigurations(environment.PROVIDER_CONFIG_JSON),
     databaseUrl,
     databasePoolMax: parsePoolMax(environment.DATABASE_POOL_MAX),
+    rateLimitWindowMs: boundedInteger(environment.RATE_LIMIT_WINDOW_MS, 60_000, 1_000, 3_600_000, 'RATE_LIMIT_WINDOW_MS'),
+    rateLimitMax: boundedInteger(environment.RATE_LIMIT_MAX, 120, 1, 100_000, 'RATE_LIMIT_MAX'),
     workerIntervalMs: boundedInteger(environment.WORKER_INTERVAL_MS, 5000, 250, 300000, 'WORKER_INTERVAL_MS'),
     workerBatchSize: boundedInteger(environment.WORKER_BATCH_SIZE, 20, 1, 100, 'WORKER_BATCH_SIZE'),
     workerStaleBatchSize: boundedInteger(environment.WORKER_STALE_BATCH_SIZE, 50, 1, 100, 'WORKER_STALE_BATCH_SIZE'),

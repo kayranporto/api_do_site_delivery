@@ -3,10 +3,18 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { requestContext } from './middleware/requestContext.js';
 import { apiKeyAuth } from './middleware/apiKeyAuth.js';
+import { createRateLimiter } from './middleware/rateLimit.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createV1Router } from './routes/v1.js';
 
-export function createHttpApp({ useCases, apiAccessToken, corsOrigins = [], jsonLimit = '64kb' }) {
+export function createHttpApp({
+  useCases,
+  apiAccessToken,
+  corsOrigins = [],
+  jsonLimit = '64kb',
+  rateLimitWindowMs = 60_000,
+  rateLimitMax = 120
+}) {
   if (!useCases || typeof useCases !== 'object') {
     throw new TypeError('useCases é obrigatório para compor a API HTTP.');
   }
@@ -40,7 +48,11 @@ export function createHttpApp({ useCases, apiAccessToken, corsOrigins = [], json
   }));
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-  // Autentica antes de processar JSON para reduzir o custo de requisições anônimas.
+  // Aplica o limite antes da autenticação e do parser JSON.
+  app.use('/api/v1', createRateLimiter({
+    windowMs: rateLimitWindowMs,
+    maxRequests: rateLimitMax
+  }));
   app.use('/api/v1', apiKeyAuth({ token: apiAccessToken }));
   app.use(express.json({ limit: jsonLimit, strict: true, type: 'application/json' }));
   app.use('/api/v1', createV1Router({ useCases }));

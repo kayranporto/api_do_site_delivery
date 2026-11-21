@@ -4,11 +4,11 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker) e 7 (Reconciliação e observabilidade) implementadas. O projeto ainda **não está pronto para produção**: resultados externos incertos continuam exigindo decisão operacional, e faltam métricas avançadas, alertas e controles específicos do ambiente.
+Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade) e 8 (Endurecimento operacional inicial) implementadas. O projeto ainda **não está pronto para produção**: o rate limiting local não é distribuído, a autenticação ainda usa um token compartilhado e faltam autorização por recurso, alertas e controles específicos do ambiente.
 
 ## Instalação e execução
 
-Requer Node.js 20 ou superior. Execute **npm install**, copie **.env.example** para **.env**, configure um API_ACCESS_TOKEN aleatório com pelo menos 32 caracteres e inicie com **npm start**.
+Requer Node.js 20 ou superior. Execute **npm ci**, copie **.env.example** para **.env**, configure um API_ACCESS_TOKEN aleatório com pelo menos 32 caracteres e inicie com **npm start**.
 
 Sem DATABASE_URL, o modo local usa repositórios em memória e perde os dados ao reiniciar.
 
@@ -36,14 +36,17 @@ O servidor verifica a versão do schema, mas não aplica migrations automaticame
 - **PORT**: por padrão 3000.
 - **NODE_ENV**: development por padrão; production exige PostgreSQL.
 - **CORS_ORIGINS**: origens exatas separadas por vírgula; sem wildcard.
+- **RATE_LIMIT_WINDOW_MS** e **RATE_LIMIT_MAX**: janela e quantidade de requisições por IP; padrões 60000 ms e 120.
 - **PROVIDER_CONFIG_JSON**: objeto JSON com configurações dos provedores.
 - **DATABASE_URL**: URL PostgreSQL opcional em desenvolvimento, obrigatória em produção.
 - **DATABASE_POOL_MAX**: limite de conexões (1–50, padrão 10).
 - Segredos de provedores são referenciados como env:NOME_DA_VARIAVEL; não grave valores secretos no Git.
 
+O rate limiter é local ao processo. Em implantação com várias réplicas, configure limite compartilhado no gateway/WAF ou Redis. Consulte docs/production-hardening.md.
+
 ## Testes
 
-Execute **npm test** para Jest e testes Node.js. A suíte Node pode ser executada separadamente com **npm run test:node**.
+Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions executa npm ci e npm test em pushes e pull requests para main. Confira o resultado real na aba Actions.
 
 ## Estrutura
 
@@ -56,4 +59,4 @@ Execute **npm test** para Jest e testes Node.js. A suíte Node pode ser executad
 - tests: testes Node.js e Jest.
 - docs: decisões das camadas, contrato HTTP e persistência.
 
-Consulte docs/http-api.md, docs/persistence-design.md e docs/reconciliation-observability.md para rotas, exemplos e limites operacionais.
+Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md e docs/production-hardening.md para rotas, exemplos e limites operacionais.
