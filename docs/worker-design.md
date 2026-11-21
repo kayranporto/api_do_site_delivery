@@ -38,10 +38,14 @@ Elas são marcadas como interrupted. Uma tentativa running é fechada com errorC
 
 Execuções interrupted são finais e permanecem disponíveis para consulta. Não são incluídas na fila de retries.
 
+## Eventos operacionais
+
+O worker e a camada de aplicação registram início/fim de tentativas, falhas e interrupções em execution_events. O armazenamento é append-only para o fluxo da aplicação; política de retenção e expurgo do banco deve ser definida pelo operador.
+
 ## Limites conhecidos
 
 - O worker precisa ser iniciado e supervisionado pelo ambiente de implantação; não há supervisor ou serviço gerenciado provisionado pelo repositório.
-- Execuções interrompidas exigem reconciliação de negócio/manual, ainda não há rotina automática para consultar o provedor.
+- Execuções interrompidas podem ser consultadas manualmente pela rota autenticada de reconciliação; não há consultas automáticas periódicas.
 - Um provedor customizado que ignore command.signal pode continuar executando após a perda do lease; o fencing impede gravações obsoletas no banco, mas não desfaz efeitos externos.
 - A garantia externa não é exactly-once. O provedor precisa aceitar e respeitar uma chave de idempotência para eliminar duplicidades em janelas de falha.
-- Não há métricas, painel, alertas ou fila de dead-letter nesta etapa.
+- Há métricas agregadas básicas via API; ainda não há painel, alertas ou fila de dead-letter.

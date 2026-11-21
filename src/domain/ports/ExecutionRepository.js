@@ -28,6 +28,10 @@ export class ExecutionRepository {
     throw new Error('ExecutionRepository.renewLease deve ser implementado por um adaptador.');
   }
 
+  async countByStatus() {
+    throw new Error('ExecutionRepository.countByStatus deve ser implementado por um adaptador.');
+  }
+
   async claimDueForRetry(_now, _limit, _leaseMs) {
     throw new Error('ExecutionRepository.claimDueForRetry deve ser implementado por um adaptador.');
   }

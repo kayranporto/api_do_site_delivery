@@ -18,3 +18,8 @@ export { ProviderExecutionError } from './errors/ProviderExecutionError.js';
 export { GetExecution } from './use-cases/GetExecution.js';
 
 export { RecoverStaleExecutions } from './use-cases/RecoverStaleExecutions.js';
+
+export { OperationalEventRepository } from './ports/OperationalEventRepository.js';
+export { ReconcileInterruptedExecution } from './use-cases/ReconcileInterruptedExecution.js';
+export { GetOperationalMetrics } from './use-cases/GetOperationalMetrics.js';
+export { GetExecutionEvents } from './use-cases/GetExecutionEvents.js';

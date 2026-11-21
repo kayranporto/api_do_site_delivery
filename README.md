@@ -4,7 +4,7 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL) e 6 (Worker e recuperação) implementadas. O projeto ainda **não está pronto para produção**: falta reconciliação operacional dos resultados externos incertos e observabilidade avançada; também são necessários controles operacionais específicos do ambiente.
+Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker) e 7 (Reconciliação e observabilidade) implementadas. O projeto ainda **não está pronto para produção**: resultados externos incertos continuam exigindo decisão operacional, e faltam métricas avançadas, alertas e controles específicos do ambiente.
 
 ## Instalação e execução
 
@@ -21,7 +21,7 @@ Com PostgreSQL configurado e o schema atualizado, execute o worker em processo s
 
 O worker recupera execuções antigas e processa retries vencidos. Ele aguarda o ciclo ativo antes de fechar conexões ao receber SIGINT ou SIGTERM. As variáveis WORKER_* configuram intervalo, lotes, limite de antiguidade e lease; consulte docs/worker-design.md.
 
-Execuções interrompidas ficam em estado **interrupted** e exigem reconciliação. Elas não são repetidas automaticamente porque o provedor externo pode ter concluído a operação antes da queda.
+Execuções interrompidas ficam em estado **interrupted** e podem ser consultadas manualmente com POST /api/v1/executions/:executionId/reconcile, desde que o provedor tenha um endpoint de consulta configurado. O resultado é registrado como evento, mas não altera o estado original nem dispara retries.
 
 ## PostgreSQL
 
@@ -56,4 +56,4 @@ Execute **npm test** para Jest e testes Node.js. A suíte Node pode ser executad
 - tests: testes Node.js e Jest.
 - docs: decisões das camadas, contrato HTTP e persistência.
 
-Consulte docs/http-api.md e docs/persistence-design.md para rotas, exemplos e limites operacionais.
+Consulte docs/http-api.md, docs/persistence-design.md e docs/reconciliation-observability.md para rotas, exemplos e limites operacionais.

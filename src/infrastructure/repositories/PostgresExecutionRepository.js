@@ -130,6 +130,13 @@ export class PostgresExecutionRepository extends ExecutionRepository {
     return result.rows.length > 0;
   }
 
+  async countByStatus() {
+    const result = await this.pool.query('SELECT status, COUNT(*)::integer AS count FROM executions GROUP BY status');
+    const counts = Object.fromEntries(Object.values(ExecutionStatus).map((status) => [status, 0]));
+    for (const row of result.rows) counts[row.status] = row.count;
+    return counts;
+  }
+
   async findDueForRetry(now, limit) {
     if (!(now instanceof Date) || Number.isNaN(now.getTime())) throw new TypeError('now deve ser uma data válida.');
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new TypeError('limit inválido.');

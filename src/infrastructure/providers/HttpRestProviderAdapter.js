@@ -200,4 +200,138 @@ export class HttpRestProviderAdapter {
     }
     return parseResponse(responseText, response.headers.get('content-type'));
   }
+
+  /** Consulta somente endpoints de leitura definidos na configuração confiável do provedor. */
+  async reconcile(command) {
+    const configuration = await this.#configurationResolver.resolve(command.integration.configurationReference);
+    const baseUrl = safeBaseUrl(configuration);
+    const operation = configuration.operations?.[command.operationName];
+    const definition = operation?.reconciliation;
+    if (!definition) return { outcome: 'unsupported', providerStatus: null };
+
+    const method = String(definition.method ?? 'GET').toUpperCase();
+    if (method !== 'GET') {
+      throw new TypeError('Reconciliação aceita somente GET.');
+    }
+    if (typeof definition.path !== 'string') throw new TypeError('path de reconciliação é obrigatório.');
+
+    const values = {
+      executionId: command.executionId,
+      idempotencyKey: command.idempotencyKey,
+      operationName: command.operationName
+    };
+    const path = definition.path.replace(/\{([A-Za-z][A-Za-z0-9]*)\}/g, (_match, key) => {
+      if (!Object.hasOwn(values, key) || typeof values[key] !== 'string' || !values[key]) {
+        throw new TypeError('Placeholder de reconciliação ausente ou não permitido.');
+      }
+      return encodeURIComponent(values[key]);
+    });
+    if (/[{}]/.test(path)) throw new TypeError('Placeholder de reconciliação inválido.');
+    const url = operationUrl(baseUrl, path);
+    const headers = new Headers({ accept: 'application/json' });
+
+    for (const [name, value] of Object.entries(configuration.headers ?? {})) {
+      validateHeader(name, value);
+      headers.set(name, value);
+    }
+    for (const [name, value] of Object.entries(definition.headers ?? {})) {
+      validateHeader(name, value);
+      headers.set(name, value);
+    }
+
+    const authentication = configuration.authentication;
+    if (authentication) {
+      if (!this.#secretResolver || typeof this.#secretResolver.resolve !== 'function') {
+        throw new TypeError('secretResolver.resolve é obrigatório para este provedor.');
+      }
+      const secretReference = command.integration.secretReference;
+      if (!secretReference) throw new TypeError('A integração não possui referência de segredo.');
+      const secret = await this.#secretResolver.resolve(secretReference);
+      if (typeof secret !== 'string' || !secret) throw new TypeError('O secret resolver retornou um valor inválido.');
+      if (authentication.type === 'bearer') {
+        headers.set('authorization', 'Bearer ' + secret);
+      } else if (authentication.type === 'header') {
+        validateHeader(authentication.headerName, secret);
+        const prefix = authentication.prefix ?? '';
+        if (typeof prefix !== 'string' || /[\r\n]/.test(prefix)) throw new TypeError('Prefixo de autenticação inválido.');
+        headers.set(authentication.headerName, prefix + secret);
+      } else {
+        throw new TypeError('Tipo de autenticação não suportado.');
+      }
+    }
+
+    if (command.idempotencyKey && configuration.idempotencyHeaderName) {
+      validateHeader(configuration.idempotencyHeaderName, command.idempotencyKey);
+      if (configuration.idempotencyHeaderName.toLowerCase() === 'authorization') {
+        throw new TypeError('idempotencyHeaderName inválido na configuração do provedor.');
+      }
+      headers.set(configuration.idempotencyHeaderName, command.idempotencyKey);
+    }
+
+    let response;
+    try {
+      response = await this.#fetch(url, {
+        method,
+        headers,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(command.timeoutMs)
+      });
+    } catch {
+      throw providerFailure('PROVIDER_RECONCILIATION_NETWORK_ERROR', false);
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      throw providerFailure('PROVIDER_RECONCILIATION_REDIRECT_BLOCKED', false);
+    }
+    const notFoundCodes = Array.isArray(definition.notFoundStatusCodes)
+      ? definition.notFoundStatusCodes
+      : [];
+    if (notFoundCodes.includes(response.status)) {
+      return { outcome: 'not_found', providerStatus: String(response.status) };
+    }
+    if (!response.ok) {
+      throw providerFailure('PROVIDER_RECONCILIATION_HTTP_' + response.status, false);
+    }
+
+    let parsed;
+    {
+      let text;
+      try {
+        text = await readBodyLimited(response, this.#maxResponseBytes);
+      } catch {
+        throw providerFailure('PROVIDER_RECONCILIATION_RESPONSE_TOO_LARGE', false);
+      }
+      parsed = parseResponse(text, response.headers.get('content-type'));
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { outcome: 'unknown', providerStatus: null };
+    }
+    const field = definition.statusField ?? 'status';
+    if (typeof field !== 'string' || !/^[A-Za-z0-9_.]+$/.test(field)) {
+      throw new TypeError('statusField de reconciliação inválido.');
+    }
+    const statusValue = field.split('.').reduce((value, key) => value?.[key], parsed);
+    const providerStatus = typeof statusValue === 'string' || typeof statusValue === 'number'
+      ? String(statusValue).trim().slice(0, 80)
+      : null;
+    if (!providerStatus) return { outcome: 'unknown', providerStatus: null };
+
+    const statusMap = definition.statusMap;
+    const supported = new Set(['succeeded', 'failed', 'pending', 'not_found', 'unknown']);
+    if (!statusMap || typeof statusMap !== 'object' || Array.isArray(statusMap)) {
+      throw new TypeError('statusMap de reconciliação é obrigatório.');
+    }
+    for (const [outcome, aliases] of Object.entries(statusMap)) {
+      if (!supported.has(outcome)) throw new TypeError('statusMap contém um resultado não permitido.');
+      const values = Array.isArray(aliases) ? aliases : [aliases];
+      if (!values.every((value) => typeof value === 'string' && value.length <= 80)) {
+        throw new TypeError('statusMap deve conter valores textuais curtos.');
+      }
+      if (values.some((value) => value.trim().toLowerCase() === providerStatus.toLowerCase())) {
+        return { outcome, providerStatus };
+      }
+    }
+    return { outcome: 'unknown', providerStatus };
+  }
 }

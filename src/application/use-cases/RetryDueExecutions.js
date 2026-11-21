@@ -1,15 +1,17 @@
 import { ExecutionStatus } from '../../domain/entities/Execution.js';
 import { InvalidProviderAdapterError } from '../errors/InvalidProviderAdapterError.js';
 import { executeProviderAttempt } from '../services/executeProviderAttempt.js';
+import { recordOperationalEvent } from '../services/recordOperationalEvent.js';
 
 const DEFAULT_LEASE_MS = 180_000;
 
 export class RetryDueExecutions {
-  constructor({ integrationRepository, executionRepository, providerRegistry, clock, leaseMs = DEFAULT_LEASE_MS }) {
+  constructor({ integrationRepository, executionRepository, providerRegistry, clock, eventRepository, leaseMs = DEFAULT_LEASE_MS }) {
     this.integrationRepository = integrationRepository;
     this.executionRepository = executionRepository;
     this.providerRegistry = providerRegistry;
     this.clock = clock;
+    this.eventRepository = eventRepository;
     this.leaseMs = leaseMs;
   }
 
@@ -35,12 +37,30 @@ export class RetryDueExecutions {
         if (!integration) {
           execution.cancel(now);
           await this.executionRepository.save(execution);
+          await recordOperationalEvent({
+            eventRepository: this.eventRepository,
+            executionId: execution.id,
+            integrationId: execution.integrationId,
+            eventType: 'execution.retry_cancelled',
+            severity: 'warning',
+            details: { reason: 'integration_not_found', status: execution.status },
+            createdAt: this.clock.now()
+          });
           results.push({ execution, outcome: 'cancelled', reason: 'integration_not_found' });
           continue;
         }
         if (!integration.isActive) {
           execution.cancel(now);
           await this.executionRepository.save(execution);
+          await recordOperationalEvent({
+            eventRepository: this.eventRepository,
+            executionId: execution.id,
+            integrationId: integration.id,
+            eventType: 'execution.retry_cancelled',
+            severity: 'warning',
+            details: { reason: 'integration_inactive', status: execution.status },
+            createdAt: this.clock.now()
+          });
           results.push({ execution, outcome: 'cancelled', reason: 'integration_inactive' });
           continue;
         }
@@ -52,6 +72,7 @@ export class RetryDueExecutions {
         const outcome = await executeProviderAttempt({
           execution, integration, adapter,
           executionRepository: this.executionRepository,
+          eventRepository: this.eventRepository,
           clock: this.clock, leaseMs: this.leaseMs
         });
         results.push({ ...outcome, outcome: 'attempted' });

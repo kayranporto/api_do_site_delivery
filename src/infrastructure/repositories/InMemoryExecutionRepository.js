@@ -84,6 +84,12 @@ export class InMemoryExecutionRepository extends ExecutionRepository {
     return true;
   }
 
+  async countByStatus() {
+    const counts = Object.fromEntries(Object.values(ExecutionStatus).map((status) => [status, 0]));
+    for (const record of this.#records.values()) counts[record.status] = (counts[record.status] ?? 0) + 1;
+    return counts;
+  }
+
   async findDueForRetry(now, limit) {
     const reference = now instanceof Date ? now : new Date(now);
     if (Number.isNaN(reference.getTime())) throw new TypeError('now deve ser uma data válida.');

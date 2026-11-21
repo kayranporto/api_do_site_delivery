@@ -17,6 +17,27 @@ function integrationResource(integration) {
   };
 }
 
+function eventResource(event) {
+  const allowedDetails = new Set([
+    'attempt', 'errorCode', 'retryable', 'status', 'outcome',
+    'providerStatus', 'reason', 'durationMs'
+  ]);
+  const details = {};
+  for (const [key, value] of Object.entries(event.details ?? {})) {
+    if (!allowedDetails.has(key)) continue;
+    if (typeof value === 'string') details[key] = value.slice(0, 120);
+    else if (typeof value === 'number' && Number.isFinite(value)) details[key] = value;
+    else if (typeof value === 'boolean') details[key] = value;
+  }
+  return {
+    id: event.id,
+    eventType: event.eventType,
+    severity: event.severity,
+    details,
+    createdAt: event.createdAt.toISOString()
+  };
+}
+
 function executionResource(execution) {
   return {
     id: execution.id,
@@ -86,6 +107,50 @@ export function createV1Router({ useCases }) {
       data: executionResource(outcome.execution),
       meta: { replayed: outcome.replayed, result: outcome.result ?? null }
     });
+  });
+
+  router.get('/observability/metrics', async (req, res) => {
+    const rawWindow = req.query.windowHours;
+    const windowHours = rawWindow === undefined ? 24 : Number(rawWindow);
+    if (!Number.isInteger(windowHours) || windowHours < 1 || windowHours > 720) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_METRICS_WINDOW',
+          message: 'windowHours deve ser um inteiro entre 1 e 720.',
+          requestId: req.requestId
+        }
+      });
+    }
+    const metrics = await useCases.getOperationalMetrics.execute({ windowHours });
+    return res.json({ data: metrics });
+  });
+
+  router.get('/executions/:executionId/events', async (req, res) => {
+    const rawLimit = req.query.limit;
+    const limit = rawLimit === undefined ? 100 : Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_EVENT_LIMIT',
+          message: 'limit deve ser um inteiro entre 1 e 500.',
+          requestId: req.requestId
+        }
+      });
+    }
+    const events = await useCases.getExecutionEvents.execute({
+      executionId: req.params.executionId,
+      limit
+    });
+    return res.json({
+      data: events.map(eventResource)
+    });
+  });
+
+  router.post('/executions/:executionId/reconcile', async (req, res) => {
+    const result = await useCases.reconcileInterruptedExecution.execute({
+      executionId: req.params.executionId
+    });
+    return res.json({ data: result });
   });
 
   router.get('/executions/:executionId', async (req, res) => {

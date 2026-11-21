@@ -33,6 +33,9 @@
 | POST | `/api/v1/integrations/:integrationId/operations` | Executar operação |
 | GET | `/api/v1/executions/:executionId` | Consultar execução |
 | POST | `/api/v1/executions/:executionId/cancel` | Cancelar execução |
+| GET | `/api/v1/executions/:executionId/events` | Consultar eventos de uma execução |
+| POST | `/api/v1/executions/:executionId/reconcile` | Consultar resultado externo de uma execução interrompida |
+| GET | `/api/v1/observability/metrics` | Consultar contagens agregadas de execuções e eventos |
 
 ## Criar integração
 
@@ -70,13 +73,44 @@ Idempotency-Key: operation-2026-000001
 
 ## Configuração de provedor
 
-`PROVIDER_CONFIG_JSON` é um objeto cujas chaves são referências de configuração. Cada entrada define `providerKey`, `baseUrl`, `allowedHosts` e operações explicitamente mapeadas. Para encaminhar uma chave de idempotência ao serviço externo via REST, defina opcionalmente `idempotencyHeaderName` (por exemplo, `Idempotency-Key`); o adaptador não envia a chave a provedores que não tenham essa opção configurada. Não coloque credenciais nele; configure a referência `env:...` e mantenha o segredo na variável de ambiente correspondente.
+`PROVIDER_CONFIG_JSON` é um objeto cujas chaves são referências de configuração. Cada entrada define `providerKey`, `baseUrl`, `allowedHosts` e operações explicitamente mapeadas. Para encaminhar uma chave de idempotência ao serviço externo via REST, defina opcionalmente `idempotencyHeaderName` (por exemplo, `Idempotency-Key`); o adaptador não envia a chave a provedores que não tenham essa opção configurada. Para habilitar reconciliação, cada operação pode declarar um bloco `reconciliation` com método somente GET/HEAD, caminho, campo de status e mapeamento de status. O endpoint é consultado somente quando a rota autenticada de reconciliação é chamada. Não coloque credenciais nele; configure a referência `env:...` e mantenha o segredo na variável de ambiente correspondente.
+
+## Reconciliação e observabilidade
+
+Uma operação pode declarar no provedor REST um endpoint de consulta somente leitura. Exemplo de estrutura dentro de uma definição de operação:
+
+```json
+{
+  "method": "POST",
+  "path": "/v1/records",
+  "reconciliation": {
+    "method": "GET",
+    "path": "/v1/operations/{idempotencyKey}",
+    "statusField": "data.state",
+    "notFoundStatusCodes": [404],
+    "statusMap": {
+      "succeeded": ["completed", "done"],
+      "failed": ["rejected", "error"],
+      "pending": ["queued", "processing"],
+      "not_found": ["missing"]
+    }
+  }
+}
+```
+
+Placeholders aceitos: {executionId}, {idempotencyKey} e {operationName}. O caminho é limitado ao hostname já aprovado em allowedHosts. A resposta normalizada é succeeded, failed, pending, not_found ou unknown. Resposta desconhecida não altera a execução: ela continua interrupted.
+
+- POST /api/v1/executions/:executionId/reconcile: consulta uma execução interrompida, se o provedor oferecer suporte.
+- GET /api/v1/executions/:executionId/events?limit=100: lista a trilha operacional.
+- GET /api/v1/observability/metrics?windowHours=24: devolve contagens de estados e eventos agregados.
+
+Todos esses endpoints exigem o mesmo Bearer token de serviço. Os eventos guardam apenas uma lista permitida de atributos operacionais; payload, segredos, headers e mensagens livres do provedor são omitidos.
 
 ## Limitações antes de produção
 
 - Repositórios atuais são em memória e perdem dados ao reiniciar.
 - Não há autenticação de usuários, papéis, escopos ou autorização por integração.
 - O token Bearer compartilhado não substitui controle de acesso por recurso.
-- Não há rate limiting, worker/scheduler, lock distribuído, outbox ou reconciliação de execuções abandonadas.
+- Ainda não há rate limiting, autorização por integração, painel de operação, alertas ou política de retenção automatizada dos eventos.
 - O adaptador HTTP restringe hosts, mas uma implantação de produção ainda precisa de políticas de egress, firewall e proteção DNS/IP no ambiente.
 - Provedores reais só devem ser configurados depois de revisão das permissões e dos requisitos operacionais.

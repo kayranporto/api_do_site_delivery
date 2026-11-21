@@ -8,13 +8,17 @@ import {
   GetIntegration,
   ListActiveIntegrations,
   RetryDueExecutions,
-  RecoverStaleExecutions
+  RecoverStaleExecutions,
+  ReconcileInterruptedExecution,
+  GetOperationalMetrics,
+  GetExecutionEvents
 } from '../application/index.js';
 import {
   EnvironmentSecretResolver,
   HttpRestProviderAdapter,
   InMemoryExecutionRepository,
   InMemoryIntegrationRepository,
+  InMemoryOperationalEventRepository,
   MapConfigurationResolver,
   MapProviderRegistry,
   SystemClock,
@@ -32,6 +36,7 @@ export function createContainer({
 } = {}) {
   const integrationRepository = repositories.integration ?? new InMemoryIntegrationRepository();
   const executionRepository = repositories.execution ?? new InMemoryExecutionRepository();
+  const eventRepository = repositories.events ?? new InMemoryOperationalEventRepository();
   const clock = new SystemClock();
   const idGenerator = new UuidGenerator();
   const configurationResolver = new MapConfigurationResolver(providerConfigurations);
@@ -55,6 +60,7 @@ export function createContainer({
   const dependencies = {
     integrationRepository,
     executionRepository,
+    eventRepository,
     providerRegistry,
     clock,
     idGenerator,
@@ -71,8 +77,18 @@ export function createContainer({
     retryDueExecutions: new RetryDueExecutions(dependencies),
     cancelExecution: new CancelExecution(dependencies),
     getExecution: new GetExecution({ executionRepository }),
+    getExecutionEvents: new GetExecutionEvents({ executionRepository, eventRepository }),
+    getOperationalMetrics: new GetOperationalMetrics({ executionRepository, eventRepository, clock }),
+    reconcileInterruptedExecution: new ReconcileInterruptedExecution({
+      executionRepository,
+      integrationRepository,
+      providerRegistry,
+      eventRepository,
+      clock
+    }),
     recoverStaleExecutions: new RecoverStaleExecutions({
       executionRepository,
+      eventRepository,
       clock,
       staleAfterMs,
       leaseMs: executionLeaseMs
@@ -80,7 +96,7 @@ export function createContainer({
   };
 
   return {
-    repositories: { integrationRepository, executionRepository },
+    repositories: { integrationRepository, executionRepository, eventRepository },
     adapters: { providerRegistry, configurationResolver, secretResolver, clock, idGenerator },
     useCases
   };

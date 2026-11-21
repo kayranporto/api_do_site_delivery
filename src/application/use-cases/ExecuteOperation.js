@@ -30,12 +30,13 @@ function replayOrConflict(existing, candidate, integrationId) {
 }
 
 export class ExecuteOperation {
-  constructor({ integrationRepository, executionRepository, providerRegistry, idGenerator, clock, leaseMs = 180_000 }) {
+  constructor({ integrationRepository, executionRepository, providerRegistry, idGenerator, clock, eventRepository, leaseMs = 180_000 }) {
     this.integrationRepository = integrationRepository;
     this.executionRepository = executionRepository;
     this.providerRegistry = providerRegistry;
     this.idGenerator = idGenerator;
     this.clock = clock;
+    this.eventRepository = eventRepository;
     this.leaseMs = leaseMs;
   }
 
@@ -95,6 +96,7 @@ export class ExecuteOperation {
       integration,
       adapter,
       executionRepository: this.executionRepository,
+      eventRepository: this.eventRepository,
       clock: this.clock,
       leaseMs: this.leaseMs ?? 180_000
     });

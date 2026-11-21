@@ -287,3 +287,103 @@ test('HttpRestProviderAdapter impede chave idempotente de sobrescrever Authoriza
   });
   await assert.rejects(() => adapter.execute(makeCommand()), /idempotencyHeaderName inválido/);
 });
+
+
+test('HttpRestProviderAdapter reconcile consulta somente GET configurado e normaliza estados', async () => {
+  let captured;
+  const adapter = new HttpRestProviderAdapter({
+    configurationResolver: new MapConfigurationResolver({
+      'config:vendor:default': makeConfig({
+        operations: {
+          'records.create': {
+            method: 'POST',
+            path: '/v1/records',
+            reconciliation: {
+              method: 'GET',
+              path: '/v1/operations/{idempotencyKey}',
+              statusField: 'data.state',
+              statusMap: {
+                succeeded: ['complete', 'done'],
+                failed: ['rejected', 'error'],
+                pending: ['queued', 'processing'],
+                not_found: ['missing']
+              }
+            }
+          }
+        }
+      })
+    }),
+    secretResolver: new EnvironmentSecretResolver({ PROVIDER_TOKEN: 'secret-for-test' }),
+    fetchImpl: async (url, options) => {
+      captured = { url: String(url), options };
+      return jsonResponse({ data: { state: 'complete' } });
+    }
+  });
+
+  const result = await adapter.reconcile(makeCommand({ idempotencyKey: 'key with spaces' }));
+  assert.equal(captured.url, 'https://api.vendor.test/v1/operations/key%20with%20spaces');
+  assert.equal(captured.options.method, 'GET');
+  assert.equal(captured.options.body, undefined);
+  assert.equal(captured.options.headers.get('authorization'), 'Bearer secret-for-test');
+  assert.equal(result.outcome, 'succeeded');
+  assert.equal(result.providerStatus, 'complete');
+});
+
+test('HttpRestProviderAdapter retorna not_found quando o endpoint de consulta responde 404', async () => {
+  const adapter = new HttpRestProviderAdapter({
+    configurationResolver: new MapConfigurationResolver({
+      'config:vendor:default': makeConfig({
+        authentication: null,
+        operations: {
+          'records.create': {
+            method: 'POST',
+            path: '/v1/records',
+            reconciliation: {
+              method: 'GET',
+              path: '/v1/operations/{executionId}',
+              statusField: 'status',
+              notFoundStatusCodes: [404],
+              statusMap: { succeeded: ['complete'] }
+            }
+          }
+        }
+      })
+    }),
+    fetchImpl: async () => jsonResponse({ message: 'missing' }, 404)
+  });
+  const result = await adapter.reconcile(makeCommand());
+  assert.equal(result.outcome, 'not_found');
+  assert.equal(result.providerStatus, '404');
+});
+
+test('HttpRestProviderAdapter não faz consulta se endpoint de reconciliação não foi configurado', async () => {
+  let called = false;
+  const adapter = new HttpRestProviderAdapter({
+    configurationResolver: new MapConfigurationResolver({ 'config:vendor:default': makeConfig() }),
+    fetchImpl: async () => { called = true; return jsonResponse({ ok: true }); }
+  });
+  assert.deepEqual(await adapter.reconcile(makeCommand()), { outcome: 'unsupported', providerStatus: null });
+  assert.equal(called, false);
+});
+
+test('HttpRestProviderAdapter rejeita método mutável na consulta de reconciliação', async () => {
+  const adapter = new HttpRestProviderAdapter({
+    configurationResolver: new MapConfigurationResolver({
+      'config:vendor:default': makeConfig({
+        operations: {
+          'records.create': {
+            method: 'POST',
+            path: '/v1/records',
+            reconciliation: {
+              method: 'POST',
+              path: '/v1/operations/status',
+              statusMap: { succeeded: ['complete'] }
+            }
+          }
+        }
+      })
+    }),
+    fetchImpl: async () => jsonResponse({ ok: true })
+  });
+  await assert.rejects(() => adapter.reconcile(makeCommand()), /somente GET ou HEAD/);
+});

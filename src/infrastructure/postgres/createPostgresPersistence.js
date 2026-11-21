@@ -1,5 +1,6 @@
 import { PostgresExecutionRepository } from '../repositories/PostgresExecutionRepository.js';
 import { PostgresIntegrationRepository } from '../repositories/PostgresIntegrationRepository.js';
+import { PostgresOperationalEventRepository } from '../repositories/PostgresOperationalEventRepository.js';
 import { POSTGRES_SCHEMA_VERSION } from './runMigrations.js';
 
 /** Abre o pool e verifica o schema. Não executa migrations automaticamente. */
@@ -40,7 +41,8 @@ export async function createPostgresPersistence({ connectionString, max = 10 } =
     pool,
     repositories: {
       integration: new PostgresIntegrationRepository({ pool }),
-      execution: new PostgresExecutionRepository({ pool })
+      execution: new PostgresExecutionRepository({ pool }),
+      events: new PostgresOperationalEventRepository({ pool })
     },
     close: () => pool.end()
   };

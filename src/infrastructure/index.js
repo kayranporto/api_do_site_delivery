@@ -11,3 +11,6 @@ export { HttpRestProviderAdapter } from './providers/HttpRestProviderAdapter.js'
 export { SystemClock } from './system/SystemClock.js';
 export { UuidGenerator } from './system/UuidGenerator.js';
 export { loadConfig } from './configuration/loadConfig.js';
+
+export { InMemoryOperationalEventRepository } from './repositories/InMemoryOperationalEventRepository.js';
+export { PostgresOperationalEventRepository } from './repositories/PostgresOperationalEventRepository.js';

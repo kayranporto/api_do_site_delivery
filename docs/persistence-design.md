@@ -34,12 +34,16 @@ O lease evita que workers saudáveis executem simultaneamente a mesma tentativa.
 
 O processo separado `npm run worker` executa a recuperação de execuções abandonadas e os retries vencidos. `npm run worker:once` executa um único ciclo. Os detalhes de agendamento, leases, fencing e desligamento estão em [worker-design.md](worker-design.md).
 
-A migration `002_execution_interrupted` inclui o estado final `interrupted` e o índice de recuperação. O migrador aplica versões pendentes em ordem, sob transação e advisory lock.
+A migration `002_execution_interrupted` inclui o estado final `interrupted` e o índice de recuperação. A migration `003_operational_events` cria o armazenamento append-only de eventos operacionais. O migrador aplica versões pendentes em ordem, sob transação e advisory lock.
+
+## Etapa 7 — Eventos e métricas
+
+A tabela execution_events registra eventos de tentativa, interrupção e reconciliação. O repositório valida eventType/severity e persiste somente campos whitelisted em details. O payload da operação, segredos, headers e mensagens de erro livres não são incluídos. A API agrega contagens por estado, tipo e severidade; não há retenção/expurgo automático nesta etapa.
 
 ## Limites atuais
 
-- Não há worker ou scheduler em execução automática; RetryDueExecutions precisa ser chamado por um processo de worker (etapa posterior).
-- Ainda não há reconciliação automática de execuções que ficaram em pending ou running após uma queda abrupta.
+- O worker é um processo separado e precisa ser iniciado/supervisionado pela plataforma de hospedagem.
+- A reconciliação de execuções interrupted é disparada manualmente; não existe polling automático de endpoints do provedor.
 - A aplicação não cria banco, usuário, rede, segredo ou infraestrutura gerenciada.
 - O adaptador em memória é volátil e serve somente para testes/desenvolvimento.
 - Não foi configurado nem migrado nenhum banco remoto nesta etapa.

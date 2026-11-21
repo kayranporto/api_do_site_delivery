@@ -10,6 +10,9 @@ import { BusinessRuleError } from '../../../domain/errors/BusinessRuleError.js';
 function classifyError(error) {
   if (error instanceof NotFoundError) return { status: 404, code: error.code, message: error.message };
   if (error instanceof IdempotencyConflictError) return { status: 409, code: error.code, message: error.message };
+  if (error?.code === 'EXECUTION_NOT_INTERRUPTED') {
+    return { status: 409, code: error.code, message: 'Somente execuções interrompidas podem ser reconciliadas.' };
+  }
   if (error?.code === 'EXECUTION_LEASE_ACTIVE' || error?.code === 'EXECUTION_LEASE_LOST') {
     return { status: 409, code: error.code, message: 'A execução está sendo processada por outro worker.' };
   }

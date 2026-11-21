@@ -1,11 +1,13 @@
 import { ExecutionStatus } from '../../domain/entities/Execution.js';
+import { recordOperationalEvent } from '../services/recordOperationalEvent.js';
 
 const DEFAULT_STALE_AFTER_MS = 300_000;
 const DEFAULT_LEASE_MS = 180_000;
 
 export class RecoverStaleExecutions {
-  constructor({ executionRepository, clock, staleAfterMs = DEFAULT_STALE_AFTER_MS, leaseMs = DEFAULT_LEASE_MS }) {
+  constructor({ executionRepository, eventRepository, clock, staleAfterMs = DEFAULT_STALE_AFTER_MS, leaseMs = DEFAULT_LEASE_MS }) {
     this.executionRepository = executionRepository;
+    this.eventRepository = eventRepository;
     this.clock = clock;
     this.staleAfterMs = staleAfterMs;
     this.leaseMs = leaseMs;
@@ -33,6 +35,15 @@ export class RecoverStaleExecutions {
       try {
         execution.interrupt(this.clock.now());
         await this.executionRepository.save(execution);
+        await recordOperationalEvent({
+          eventRepository: this.eventRepository,
+          executionId: execution.id,
+          integrationId: execution.integrationId,
+          eventType: 'execution.interrupted',
+          severity: 'warning',
+          details: { status: execution.status, reason: previousStatus },
+          createdAt: this.clock.now()
+        });
         results.push({ executionId: execution.id, previousStatus, outcome: 'interrupted' });
       } catch (error) {
         if (error?.code === 'EXECUTION_LEASE_LOST') {

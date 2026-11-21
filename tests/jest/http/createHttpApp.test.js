@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from '@jest/globals';
 import request from 'supertest';
 import { createContainer } from '../../../src/bootstrap/createContainer.js';
 import { createHttpApp } from '../../../src/infrastructure/http/createHttpApp.js';
+import { Execution } from '../../../src/domain/entities/Execution.js';
 
 const API_TOKEN = 'test-token-with-at-least-thirty-two-characters-long';
 
@@ -113,4 +114,46 @@ describe('HTTP API', () => {
     expect(allowed.headers['access-control-allow-origin']).toBe('https://client.example.test');
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();
   });
+
+  test('métricas operacionais são protegidas por token e agregam estados/eventos', async () => {
+    await request(app).get('/api/v1/observability/metrics').expect(401);
+    const response = await auth(request(app).get('/api/v1/observability/metrics?windowHours=24')).expect(200);
+    expect(response.body.data.windowHours).toBe(24);
+    expect(response.body.data.executionsByStatus.pending).toBe(0);
+    expect(response.body.data.events.total).toBe(0);
+  });
+
+  test('reconcilia execução interrupted e expõe eventos sem modificar seu estado', async () => {
+    const created = await auth(request(app).post('/api/v1/integrations'))
+      .send(integrationBody)
+      .expect(201);
+    const integrationId = created.body.data.id;
+    const execution = new Execution({
+      id: 'execution-http-reconciliation',
+      integrationId,
+      operationName: 'records.create',
+      createdAt: new Date('2026-07-01T10:00:00.000Z')
+    });
+    execution.interrupt(new Date('2026-07-01T10:01:00.000Z'));
+    await container.repositories.executionRepository.save(execution);
+
+    const reconciled = await auth(request(app)
+      .post('/api/v1/executions/execution-http-reconciliation/reconcile'))
+      .expect(200);
+    expect(reconciled.body.data.outcome).toBe('unsupported');
+    expect(reconciled.body.data.executionStatus).toBe('interrupted');
+
+    const saved = await container.repositories.executionRepository.findById(execution.id);
+    expect(saved.status).toBe('interrupted');
+    const events = await auth(request(app)
+      .get('/api/v1/executions/execution-http-reconciliation/events'))
+      .expect(200);
+    expect(events.body.data.map((event) => event.eventType)).toContain('execution.reconciliation_unsupported');
+  });
+
+  test('métricas rejeitam janela inválida', async () => {
+    const response = await auth(request(app).get('/api/v1/observability/metrics?windowHours=721')).expect(400);
+    expect(response.body.error.code).toBe('INVALID_METRICS_WINDOW');
+  });
+
 });
