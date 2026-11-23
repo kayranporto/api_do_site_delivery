@@ -11,6 +11,8 @@ import {
   createIntegrationSchema,
   executeOperationSchema,
   createApiClientSchema,
+  rotateApiClientSchema,
+  updateApiClientLimitsSchema,
   apiClientAuditQuerySchema
 } from './schemas.js';
 
@@ -78,6 +80,9 @@ function apiClientResource(client) {
     scopes: client.scopes,
     integrationIds: client.integrationIds,
     createdAt: client.createdAt.toISOString(),
+    expiresAt: client.expiresAt?.toISOString() ?? null,
+    rateLimitMax: client.rateLimitMax,
+    rateLimitWindowMs: client.rateLimitWindowMs,
     revokedAt: client.revokedAt?.toISOString() ?? null,
     lastUsedAt: client.lastUsedAt?.toISOString() ?? null
   };
@@ -87,7 +92,6 @@ export function createV1Router({ useCases, apiClientRepository, executionReposit
   const router = Router();
   const executionAccess = requireExecutionAccess(executionRepository);
 
-  // Gestão de credenciais administrativas: somente o token de serviço legado/master.
   router.post('/clients', requireMaster, validateBody(createApiClientSchema), async (req, res) => {
     const result = await useCases.createApiClient.execute(req.validatedBody);
     return res.status(201).json({
@@ -101,6 +105,42 @@ export function createV1Router({ useCases, apiClientRepository, executionReposit
     const clients = await useCases.listApiClients.execute();
     return res.json({ data: clients.map(apiClientResource) });
   });
+
+  router.post('/clients/:clientId/rotate',
+    requireMaster,
+    validateBody(rotateApiClientSchema),
+    async (req, res) => {
+      const result = await useCases.rotateApiClient.execute({
+        clientId: req.params.clientId,
+        ...req.validatedBody
+      });
+      if (!result) {
+        return res.status(404).json({
+          error: { code: 'ACTIVE_CLIENT_NOT_FOUND', message: 'Credencial ativa não encontrada.', requestId: req.requestId }
+        });
+      }
+      return res.json({
+        data: apiClientResource(result.client),
+        credential: result.credential,
+        meta: { credentialShownOnce: true, previousCredentialInvalidated: true }
+      });
+    });
+
+  router.post('/clients/:clientId/limits',
+    requireMaster,
+    validateBody(updateApiClientLimitsSchema),
+    async (req, res) => {
+      const client = await useCases.updateApiClientLimits.execute({
+        clientId: req.params.clientId,
+        ...req.validatedBody
+      });
+      if (!client) {
+        return res.status(404).json({
+          error: { code: 'CLIENT_NOT_FOUND', message: 'Credencial não encontrada.', requestId: req.requestId }
+        });
+      }
+      return res.json({ data: apiClientResource(client) });
+    });
 
   router.post('/clients/:clientId/revoke', requireMaster, async (req, res) => {
     const client = await useCases.revokeApiClient.execute({ clientId: req.params.clientId });
@@ -139,7 +179,6 @@ export function createV1Router({ useCases, apiClientRepository, executionReposit
     });
   });
 
-  // Criar integrações segue restrito à credencial master.
   router.post('/integrations', requireMaster, validateBody(createIntegrationSchema), async (req, res) => {
     const integration = await useCases.createIntegration.execute(req.validatedBody);
     return res.status(201).json({ data: integrationResource(integration) });

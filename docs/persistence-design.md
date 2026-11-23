@@ -51,6 +51,13 @@ A tabela execution_events registra eventos de tentativa, interrupção e reconci
 
 ## Etapa 9 — Credenciais de API
 
-A migration `004_api_clients` adiciona a tabela `api_clients`, que guarda prefixo, hash SHA-256, escopos, allowlist de integrações e datas de criação, revogação e último uso. A tabela `api_client_audit` registra criação, autenticação e revogação. O segredo bruto não é persistido.
+A migration `004_api_clients` adiciona a tabela `api_clients`, que guarda prefixo, hash SHA-256, escopos, allowlist de integrações e datas de criação, expiração, revogação e último uso. A tabela `api_client_audit` registra criação, autenticação, rotação e revogação. O segredo bruto não é persistido.
 
-A infraestrutura fornece `InMemoryApiClientRepository` para testes/desenvolvimento e `PostgresApiClientRepository` para persistência. O composition root injeta o repositório na autenticação HTTP e nos casos de uso de gestão de credenciais. O migrador agora exige a versão `004_api_clients`; execute `npm run db:migrate` explicitamente em ambientes PostgreSQL já existentes.
+A infraestrutura fornece `InMemoryApiClientRepository` para testes/desenvolvimento e `PostgresApiClientRepository` para persistência. O composition root injeta o repositório na autenticação HTTP e nos casos de uso de gestão de credenciais. O migrador da Etapa 9 exigia a versão `004_api_clients`; a versão atual é `005_api_client_lifecycle`. Execute `npm run db:migrate` explicitamente em ambientes PostgreSQL já existentes.
+
+
+## Etapa 10 — Ciclo de vida de clientes
+
+A migration `005_api_client_lifecycle` acrescenta `expires_at`, `rate_limit_max` e `rate_limit_window_ms` à tabela `api_clients`, além de permitir os eventos `rotated` e `limits_updated` na auditoria. Credenciais já existentes recebem validade retroativa de 90 dias desde `created_at`; novas credenciais recebem validade padrão de 90 dias e limites padrão de 120 requisições por 60 segundos. A rota administrativa de atualização de limites modifica esses parâmetros sem alterar a credencial.
+
+A rotação atualiza prefixo, hash e validade em uma única instrução `UPDATE`; a chave anterior deixa de ser encontrada na autenticação. A nova chave não é persistida em texto claro. A execução da migration continua explícita via `npm run db:migrate`.

@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { requestContext } from './middleware/requestContext.js';
 import { apiKeyAuth } from './middleware/apiKeyAuth.js';
 import { createRateLimiter } from './middleware/rateLimit.js';
+import { recordApiClientAuthentication } from './middleware/recordApiClientAuthentication.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createV1Router } from './routes/v1.js';
 
@@ -50,11 +51,20 @@ export function createHttpApp({
   }));
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+  // Limite geral por IP antes da autenticação para reduzir abuso anônimo.
   app.use('/api/v1', createRateLimiter({
     windowMs: rateLimitWindowMs,
     maxRequests: rateLimitMax
   }));
   app.use('/api/v1', apiKeyAuth({ token: apiAccessToken, apiClientRepository }));
+  // Quota específica por credencial; master permanece protegida pelo limite geral por IP.
+  app.use('/api/v1', createRateLimiter({
+    windowMs: (req) => req.auth?.rateLimitWindowMs ?? rateLimitWindowMs,
+    maxRequests: (req) => req.auth?.rateLimitMax ?? rateLimitMax,
+    keyResolver: (req) => req.auth?.clientId ? 'client:' + req.auth.clientId : 'master:' + req.ip,
+    skip: (req) => req.auth?.isMaster === true
+  }));
+  app.use('/api/v1', recordApiClientAuthentication({ apiClientRepository }));
   app.use(express.json({ limit: jsonLimit, strict: true, type: 'application/json' }));
   app.use('/api/v1', createV1Router({ useCases, apiClientRepository, executionRepository }));
   app.use((_req, res) => res.status(404).json({

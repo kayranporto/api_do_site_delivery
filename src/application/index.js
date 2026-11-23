@@ -28,3 +28,5 @@ export { CreateApiClient } from './use-cases/CreateApiClient.js';
 export { ListApiClients } from './use-cases/ListApiClients.js';
 export { RevokeApiClient } from './use-cases/RevokeApiClient.js';
 export { ListApiClientAudit } from './use-cases/ListApiClientAudit.js';
+export { RotateApiClient } from './use-cases/RotateApiClient.js';
+export { UpdateApiClientLimits } from './use-cases/UpdateApiClientLimits.js';

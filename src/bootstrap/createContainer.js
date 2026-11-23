@@ -15,7 +15,9 @@ import {
   CreateApiClient,
   ListApiClients,
   RevokeApiClient,
-  ListApiClientAudit
+  ListApiClientAudit,
+  RotateApiClient,
+  UpdateApiClientLimits
 } from '../application/index.js';
 import {
   EnvironmentSecretResolver,
@@ -104,7 +106,9 @@ export function createContainer({
     createApiClient: new CreateApiClient({ apiClientRepository, idGenerator, clock, apiKeyGenerator }),
     listApiClients: new ListApiClients({ apiClientRepository }),
     revokeApiClient: new RevokeApiClient({ apiClientRepository, clock }),
-    listApiClientAudit: new ListApiClientAudit({ apiClientRepository })
+    listApiClientAudit: new ListApiClientAudit({ apiClientRepository }),
+    rotateApiClient: new RotateApiClient({ apiClientRepository, clock, apiKeyGenerator }),
+    updateApiClientLimits: new UpdateApiClientLimits({ apiClientRepository, clock })
   };
 
   return {

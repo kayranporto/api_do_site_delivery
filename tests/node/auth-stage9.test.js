@@ -119,7 +119,7 @@ test('PostgresApiClientRepository usa parâmetros SQL e nunca devolve hash em li
   });
   assert.equal(created.keyPrefix, '0123456789abcdef');
   assert.equal(Object.hasOwn(created, 'keyHash'), false);
-  assert.ok(calls[0].sql.includes('VALUES ($1, $2, $3, $4, $5::text[], $6::text[], $7)'));
+  assert.ok(calls[0].sql.includes('VALUES ($1, $2, $3, $4, $5::text[], $6::text[], $7, $8, $9, $10)'));
 
   const found = await repository.findActiveByPrefix(created.keyPrefix);
   assert.equal(found.keyHash, baseRow.key_hash);

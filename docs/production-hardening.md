@@ -16,8 +16,15 @@ A tabela execution_events é append-only pela aplicação. A política de reten�
 
 ## Limitações remanescentes
 
-- Rate limiting em memória não é distribuído.
-- Autenticação continua sendo um único Bearer token de serviço; não há credenciais individuais, scopes ou autorização por integração.
+- Rate limiting geral por IP e quotas individuais por cliente são mantidos em memória; não são distribuídos e reiniciam quando o processo reinicia.
+- A credencial master permanece global e deve ser mantida fora das aplicações consumidoras; chaves individuais têm escopos e allowlists de integração.
 - /health é uma verificação de processo, não uma prova de prontidão do banco ou do worker.
 - Não há alertas, dashboard, métricas Prometheus, SIEM ou política automática de retenção.
 - A implantação ainda precisa de TLS, firewall/egress, gestão/rotação de segredos, backup e monitoramento externo.
+
+
+## Etapa 10 — Ciclo de vida e quotas de credenciais
+
+Novas chaves individuais expiram em 90 dias por padrão. O administrador pode configurar `expiresInDays`, limitado a 3650 dias, e rotacionar uma credencial pela rota administrativa. A rotação atualiza prefixo/hash/validade em uma operação de banco e invalida a chave anterior.
+
+A tabela `api_clients` mantém limites próprios por credencial: `rate_limit_max` e `rate_limit_window_ms`. O middleware aplica o limite após autenticação e antes do parser JSON; o limite global por IP continua antes da autenticação. Os dois limitadores são locais à instância e servem como defesa complementar, não como quota distribuída. Para múltiplas réplicas, imponha limites consistentes no API gateway/WAF ou em serviço compartilhado.

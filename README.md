@@ -4,7 +4,7 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial) e 9 (Credenciais e autorização) implementadas. O projeto ainda **não está pronto para produção**: o rate limiting local não é distribuído, a credencial master conserva acesso global e faltam expiração/rotação automática, alertas e controles específicos do ambiente.
+Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial) 9 (Credenciais e autorização) e 10 (Ciclo de vida e quotas de credenciais) implementadas. O projeto ainda **não está pronto para produção**: os limitadores são locais ao processo, a credencial master conserva acesso global e faltam alertas e controles específicos do ambiente.
 
 ## Instalação e execução
 
@@ -46,7 +46,7 @@ O rate limiter é local ao processo. Em implantação com várias réplicas, con
 
 ## Credenciais de cliente
 
-Use a credencial master para criar chaves individuais em **POST /api/v1/clients**. A chave bruta é exibida somente na resposta de criação; o banco mantém apenas o hash. Atribua apenas os escopos e IDs de integração necessários. Use **POST /api/v1/clients/:clientId/revoke** para revogar uma chave e **GET /api/v1/clients/:clientId/audit** para consultar eventos administrativos e de autenticação. Consulte docs/authentication-authorization.md.
+Use a credencial master para criar chaves individuais em **POST /api/v1/clients**. A chave bruta é exibida somente na criação e na rotação; o banco mantém apenas o hash. Por padrão, uma nova chave expira em 90 dias. Configure `expiresInDays`, `rateLimitMax` e `rateLimitWindowMs` no corpo da criação. Use **POST /api/v1/clients/:clientId/rotate** para trocar a chave (a anterior é invalidada imediatamente), **POST /api/v1/clients/:clientId/limits** para ajustar quotas, **POST /api/v1/clients/:clientId/revoke** para revogar e **GET /api/v1/clients/:clientId/audit** para consultar eventos. Consulte docs/authentication-authorization.md.
 
 Campo `integrationIds` omitido significa nenhum acesso a integrações; uma lista limita a IDs específicos; `null` dá acesso global. A criação de integrações e a gestão de credenciais permanecem exclusivas da master.
 

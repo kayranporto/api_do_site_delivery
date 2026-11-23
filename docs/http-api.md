@@ -113,8 +113,8 @@ Todos esses endpoints exigem o mesmo Bearer token de serviço. Os eventos guarda
 
 - Repositórios atuais são em memória e perdem dados ao reiniciar.
 - A credencial master continua tendo acesso global; aplicações consumidoras devem usar chaves individuais restritas.
-- O rate limiting continua local por IP e não é distribuído entre réplicas.
-- Ainda faltam expiração e rotação automática de chaves, alertas, painel de operação e política automática de retenção dos eventos.
+- O rate limiting por IP e as quotas por cliente continuam locais à instância e não são distribuídos entre réplicas.
+- A expiração e a rotação são administradas pelo operador; ainda faltam alertas, painel de operação e política automática de retenção dos eventos.
 - O adaptador HTTP restringe hosts, mas uma implantação de produção ainda precisa de políticas de egress, firewall e proteção DNS/IP no ambiente.
 - Provedores reais só devem ser configurados depois de revisão das permissões e dos requisitos operacionais.
 
@@ -125,7 +125,12 @@ Todos esses endpoints exigem o mesmo Bearer token de serviço. Os eventos guarda
 |---|---|---|
 | POST | `/api/v1/clients` | Master: criar credencial individual |
 | GET | `/api/v1/clients` | Master: listar metadados das credenciais |
+| POST | `/api/v1/clients/:clientId/rotate` | Master: rotacionar credencial e invalidar a anterior |
+| POST | `/api/v1/clients/:clientId/limits` | Master: ajustar quotas individuais |
 | POST | `/api/v1/clients/:clientId/revoke` | Master: revogar credencial |
 | GET | `/api/v1/clients/:clientId/audit` | Master: consultar auditoria |
 
 A credencial individual precisa ter o escopo adequado para cada rota. O campo `integrationIds` limita as integrações e as execuções acessíveis; a ausência do campo ou uma lista vazia significa nenhum acesso, enquanto `null` significa acesso global. A criação de integrações e a administração de credenciais exigem a credencial master.
+
+
+A criação de clientes aceita `expiresInDays` (padrão 90), `rateLimitMax` (padrão 120) e `rateLimitWindowMs` (padrão 60000). A rotação aceita `expiresInDays` para renovar a validade. A rota `/limits` permite alterar `rateLimitMax` e/ou `rateLimitWindowMs` sem trocar a chave. A quota é por cliente e permanece contínua após a rotação da chave. A chave nova é retornada somente na resposta de rotação.

@@ -35,10 +35,24 @@ export const createApiClientSchema = z.object({
   name: z.string().trim().min(2).max(120),
   scopes: z.array(z.enum(apiScopes)).min(1).max(apiScopes.length)
     .refine((items) => new Set(items).size === items.length, 'Escopos duplicados não são permitidos.'),
-  // null significa acesso a qualquer integração; omitir a propriedade significa nenhuma.
   integrationIds: z.array(z.string().trim().min(1).max(128)).max(500)
     .refine((items) => new Set(items).size === items.length, 'IDs de integração duplicados não são permitidos.')
-    .nullable().optional()
+    .nullable().optional(),
+  expiresInDays: z.number().int().min(1).max(3650).default(90),
+  rateLimitMax: z.number().int().min(1).max(100000).default(120),
+  rateLimitWindowMs: z.number().int().min(1000).max(3600000).default(60000)
+}).strict();
+
+export const updateApiClientLimitsSchema = z.object({
+  rateLimitMax: z.number().int().min(1).max(100000).optional(),
+  rateLimitWindowMs: z.number().int().min(1000).max(3600000).optional()
+}).strict().refine(
+  (value) => value.rateLimitMax !== undefined || value.rateLimitWindowMs !== undefined,
+  'Informe ao menos um limite para atualizar.'
+);
+
+export const rotateApiClientSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(3650).default(90)
 }).strict();
 
 export const apiClientAuditQuerySchema = z.object({
