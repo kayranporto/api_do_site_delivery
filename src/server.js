@@ -5,6 +5,7 @@ import { createContainer } from './bootstrap/createContainer.js';
 import { createPostgresPersistence } from './infrastructure/postgres/createPostgresPersistence.js';
 import { loadConfig } from './infrastructure/configuration/loadConfig.js';
 import { createHttpApp } from './infrastructure/http/createHttpApp.js';
+import { UpstashRedisRateLimitStore } from './infrastructure/rate-limits/UpstashRedisRateLimitStore.js';
 
 export async function buildHttpApplication({ config = loadConfig(), container } = {}) {
   let activeContainer = container;
@@ -31,11 +32,19 @@ export async function buildHttpApplication({ config = loadConfig(), container } 
     });
   }
 
+  const rateLimitStore = config.rateLimitStore === 'upstash'
+    ? new UpstashRedisRateLimitStore({
+      url: config.upstashRedisRestUrl,
+      token: config.upstashRedisRestToken
+    })
+    : undefined;
+
   const app = createHttpApp({
     useCases: activeContainer.useCases,
     apiAccessToken: config.apiAccessToken,
     apiClientRepository: activeContainer.repositories.apiClientRepository,
     executionRepository: activeContainer.repositories.executionRepository,
+    rateLimitStore,
     corsOrigins: config.corsOrigins,
     rateLimitWindowMs: config.rateLimitWindowMs,
     rateLimitMax: config.rateLimitMax

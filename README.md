@@ -4,13 +4,15 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial) 9 (Credenciais e autorização) e 10 (Ciclo de vida e quotas de credenciais) implementadas. O projeto ainda **não está pronto para produção**: os limitadores são locais ao processo, a credencial master conserva acesso global e faltam alertas e controles específicos do ambiente.
+Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial), 9 (Credenciais e autorização), 10 (Ciclo de vida e quotas de credenciais) e 11 (Rate limiting distribuído e consumo por cliente) implementadas.
+
+O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, concluir hardening operacional e definir alertas e controles do ambiente.
 
 ## Instalação e execução
 
 Requer Node.js 20 ou superior. Execute **npm ci**, copie **.env.example** para **.env**, configure um API_ACCESS_TOKEN aleatório com pelo menos 32 caracteres e inicie com **npm start**.
 
-Sem DATABASE_URL, o modo local usa repositórios em memória e perde os dados ao reiniciar.
+Sem DATABASE_URL, o modo local usa repositórios em memória e perde os dados ao reiniciar. O rate limit local também usa memória e não coordena processos diferentes.
 
 ## Worker e retries automáticos
 
@@ -29,26 +31,19 @@ Configure DATABASE_URL e DATABASE_POOL_MAX no arquivo .env. Antes de iniciar a A
 
 O servidor verifica a versão do schema, mas não aplica migrations automaticamente. Em NODE_ENV=production, DATABASE_URL é obrigatório. A migration 004 cria as tabelas de credenciais e auditoria de clientes.
 
-## Configuração
+## Rate limiting compartilhado
 
-- **API_ACCESS_TOKEN**: credencial master (mínimo 32 caracteres); mantenha em cofre de segredos e não a entregue aos consumidores.
-- **HOST**: por padrão 127.0.0.1.
-- **PORT**: por padrão 3000.
-- **NODE_ENV**: development por padrão; production exige PostgreSQL.
-- **CORS_ORIGINS**: origens exatas separadas por vírgula; sem wildcard.
-- **RATE_LIMIT_WINDOW_MS** e **RATE_LIMIT_MAX**: janela e quantidade de requisições por IP; padrões 60000 ms e 120.
-- **PROVIDER_CONFIG_JSON**: objeto JSON com configurações dos provedores.
-- **DATABASE_URL**: URL PostgreSQL opcional em desenvolvimento, obrigatória em produção.
-- **DATABASE_POOL_MAX**: limite de conexões (1–50, padrão 10).
-- Segredos de provedores são referenciados como env:NOME_DA_VARIAVEL; não grave valores secretos no Git.
+Em desenvolvimento, **RATE_LIMIT_STORE=memory** mantém os contadores no processo. Para várias réplicas e para produção, configure **RATE_LIMIT_STORE=upstash**, **UPSTASH_REDIS_REST_URL** e **UPSTASH_REDIS_REST_TOKEN**. O servidor exige o Redis compartilhado em NODE_ENV=production e falha fechado quando o armazenamento não está disponível.
 
-O rate limiter é local ao processo. Em implantação com várias réplicas, configure limite compartilhado no gateway/WAF ou Redis. Consulte docs/production-hardening.md.
+O limite geral por IP continua antes da autenticação. Depois da autenticação, cada credencial individual recebe sua quota própria, compartilhada entre instâncias. A credencial master não usa a quota individual, mas continua sob o limite geral por IP.
+
+As chamadas autenticadas por credencial individual geram contagens diárias no Redis, retidas por 35 dias. A master consulta **GET /api/v1/clients/:clientId/usage?days=30** para visualizar até 30 dias de consumo. Isso é telemetria de requisições, não faturamento nem quota mensal. Consulte docs/rate-limiting-usage.md e docs/production-hardening.md.
 
 ## Credenciais de cliente
 
-Use a credencial master para criar chaves individuais em **POST /api/v1/clients**. A chave bruta é exibida somente na criação e na rotação; o banco mantém apenas o hash. Por padrão, uma nova chave expira em 90 dias. Configure `expiresInDays`, `rateLimitMax` e `rateLimitWindowMs` no corpo da criação. Use **POST /api/v1/clients/:clientId/rotate** para trocar a chave (a anterior é invalidada imediatamente), **POST /api/v1/clients/:clientId/limits** para ajustar quotas, **POST /api/v1/clients/:clientId/revoke** para revogar e **GET /api/v1/clients/:clientId/audit** para consultar eventos. Consulte docs/authentication-authorization.md.
+Use a credencial master para criar chaves individuais em **POST /api/v1/clients**. A chave bruta é exibida somente na criação e na rotação; o banco mantém apenas o hash. Por padrão, uma nova chave expira em 90 dias. Configure **expiresInDays**, **rateLimitMax** e **rateLimitWindowMs** no corpo da criação. Use **POST /api/v1/clients/:clientId/rotate** para trocar a chave (a anterior é invalidada imediatamente), **POST /api/v1/clients/:clientId/limits** para ajustar quotas, **POST /api/v1/clients/:clientId/revoke** para revogar, **GET /api/v1/clients/:clientId/audit** para consultar eventos e **GET /api/v1/clients/:clientId/usage** para consultar consumo diário. Consulte docs/authentication-authorization.md.
 
-Campo `integrationIds` omitido significa nenhum acesso a integrações; uma lista limita a IDs específicos; `null` dá acesso global. A criação de integrações e a gestão de credenciais permanecem exclusivas da master.
+Campo **integrationIds** omitido significa nenhum acesso a integrações; uma lista limita a IDs específicos; **null** dá acesso global. A criação de integrações e a gestão de credenciais permanecem exclusivas da master.
 
 ## Testes
 
@@ -58,11 +53,11 @@ Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions ex
 
 - src/domain: entidades, Value Objects, erros e portas.
 - src/application: casos de uso e contratos de saída.
-- src/infrastructure: repositórios em memória e PostgreSQL, provedores e adaptadores HTTP.
+- src/infrastructure: repositórios em memória e PostgreSQL, provedores, rate limiting e adaptadores HTTP.
 - database/migrations: schema versionado do PostgreSQL.
 - src/bootstrap: composição de dependências.
 - src/server.js: inicialização do servidor Express.
 - tests: testes Node.js e Jest.
-- docs: decisões das camadas, contrato HTTP e persistência.
+- docs: decisões das camadas, contrato HTTP, persistência e operação.
 
-Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.
+Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md, docs/rate-limiting-usage.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.

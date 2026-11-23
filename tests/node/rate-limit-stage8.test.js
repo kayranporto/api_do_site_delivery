@@ -13,7 +13,7 @@ function response() {
   };
 }
 
-test('rate limiter permite até o limite e responde 429 ao exceder a janela', () => {
+test('rate limiter permite até o limite e responde 429 ao exceder a janela', async () => {
   let now = 10_000;
   const limiter = createRateLimiter({ windowMs: 60_000, maxRequests: 2, clock: () => now });
   const req = { ip: '192.0.2.1', requestId: 'request-1' };
@@ -21,11 +21,11 @@ test('rate limiter permite até o limite e responde 429 ao exceder a janela', ()
   const next = () => { nextCalls += 1; };
 
   const first = response();
-  limiter(req, first, next);
+  await limiter(req, first, next);
   const second = response();
-  limiter(req, second, next);
+  await limiter(req, second, next);
   const third = response();
-  limiter(req, third, next);
+  await limiter(req, third, next);
 
   assert.equal(nextCalls, 2);
   assert.equal(first.headers['x-ratelimit-remaining'], '1');
@@ -36,17 +36,17 @@ test('rate limiter permite até o limite e responde 429 ao exceder a janela', ()
 
   now += 60_001;
   const renewed = response();
-  limiter(req, renewed, next);
+  await limiter(req, renewed, next);
   assert.equal(renewed.statusCode, 200);
   assert.equal(nextCalls, 3);
 });
 
-test('rate limiter mantém buckets separados por IP e valida configuração', () => {
+test('rate limiter mantém buckets separados por IP e valida configuração', async () => {
   const limiter = createRateLimiter({ maxRequests: 1 });
   let nextCalls = 0;
   const next = () => { nextCalls += 1; };
-  limiter({ ip: '192.0.2.1' }, response(), next);
-  limiter({ ip: '192.0.2.2' }, response(), next);
+  await limiter({ ip: '192.0.2.1' }, response(), next);
+  await limiter({ ip: '192.0.2.2' }, response(), next);
   assert.equal(nextCalls, 2);
   assert.throws(() => createRateLimiter({ windowMs: 10 }), RangeError);
 });

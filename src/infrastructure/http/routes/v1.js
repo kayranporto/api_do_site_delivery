@@ -88,7 +88,7 @@ function apiClientResource(client) {
   };
 }
 
-export function createV1Router({ useCases, apiClientRepository, executionRepository }) {
+export function createV1Router({ useCases, apiClientRepository, executionRepository, rateLimitStore }) {
   const router = Router();
   const executionAccess = requireExecutionAccess(executionRepository);
 
@@ -176,6 +176,36 @@ export function createV1Router({ useCases, apiClientRepository, executionReposit
         requestId: event.requestId,
         createdAt: event.createdAt.toISOString()
       }))
+    });
+  });
+
+  router.get('/clients/:clientId/usage', requireMaster, async (req, res) => {
+    const rawDays = req.query.days;
+    const days = rawDays === undefined ? 30 : Number(rawDays);
+    if (!Number.isInteger(days) || days < 1 || days > 30) {
+      return res.status(400).json({
+        error: { code: 'INVALID_USAGE_WINDOW', message: 'days deve ser um inteiro entre 1 e 30.', requestId: req.requestId }
+      });
+    }
+    const clients = await useCases.listApiClients.execute();
+    if (!clients.some((client) => client.id === req.params.clientId)) {
+      return res.status(404).json({
+        error: { code: 'CLIENT_NOT_FOUND', message: 'Credencial não encontrada.', requestId: req.requestId }
+      });
+    }
+    const usage = await rateLimitStore.getClientUsage({
+      clientId: req.params.clientId,
+      days
+    });
+    return res.json({
+      data: {
+        clientId: req.params.clientId,
+        days,
+        totalRequests: usage.totalRequests,
+        daily: usage.daily,
+        retentionDays: 35,
+        generatedAt: new Date().toISOString()
+      }
     });
   });
 

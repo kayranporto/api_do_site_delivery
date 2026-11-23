@@ -1,10 +1,14 @@
-/** Rate limiter local. Use gateway ou armazenamento distribuído em múltiplas réplicas. */
+import { createInMemoryRateLimitStore } from '../../rate-limits/InMemoryRateLimitStore.js';
+
+/** Rate limiter com store substituível: memória local ou Redis compartilhado. */
 export function createRateLimiter({
   windowMs = 60_000,
   maxRequests = 120,
   maxClients = 10_000,
   clock = Date.now,
+  rateLimitStore = createInMemoryRateLimitStore({ maxClients }),
   keyResolver = (req) => typeof req.ip === 'string' && req.ip ? req.ip : 'unknown',
+  usageClientIdResolver = () => null,
   skip = () => false
 } = {}) {
   const resolveValue = (value, req, name, min, max) => {
@@ -19,38 +23,40 @@ export function createRateLimiter({
   if (!Number.isInteger(maxClients) || maxClients < 100 || maxClients > 100_000) {
     throw new RangeError('maxClients deve estar entre 100 e 100000.');
   }
-  if (typeof keyResolver !== 'function' || typeof skip !== 'function') {
-    throw new TypeError('keyResolver e skip devem ser funções.');
+  if (typeof keyResolver !== 'function' || typeof usageClientIdResolver !== 'function' || typeof skip !== 'function') {
+    throw new TypeError('keyResolver, usageClientIdResolver e skip devem ser funções.');
+  }
+  if (!rateLimitStore || typeof rateLimitStore.consume !== 'function') {
+    throw new TypeError('rateLimitStore deve implementar consume().');
   }
 
-  const buckets = new Map();
-  return function rateLimit(req, res, next) {
+  return async function rateLimit(req, res, next) {
     try {
       if (skip(req)) return next();
       const now = clock();
       const key = keyResolver(req);
       if (typeof key !== 'string' || !key) throw new TypeError('Chave de rate limit inválida.');
+      const usageClientId = usageClientIdResolver(req);
+      if (usageClientId !== null && usageClientId !== undefined
+        && (typeof usageClientId !== 'string' || !usageClientId)) {
+        throw new TypeError('Identificador de cliente para consumo inválido.');
+      }
       const currentWindowMs = resolveValue(windowMs, req, 'RATE_LIMIT_WINDOW_MS', 1_000, 3_600_000);
       const currentMax = resolveValue(maxRequests, req, 'RATE_LIMIT_MAX', 1, 100_000);
-      let bucket = buckets.get(key);
+      const bucket = await rateLimitStore.consume({
+        key,
+        windowMs: currentWindowMs,
+        now,
+        usageClientId: usageClientId ?? null
+      });
 
-      if (!bucket || now >= bucket.resetAt) {
-        if (buckets.size >= maxClients) {
-          for (const [client, entry] of buckets) {
-            if (now >= entry.resetAt) buckets.delete(client);
-          }
-        }
-        if (buckets.size >= maxClients && !buckets.has(key)) {
-          res.setHeader('retry-after', '1');
-          return res.status(503).json({
-            error: { code: 'RATE_LIMIT_CAPACITY', message: 'Limite temporário de clientes atingido.' }
-          });
-        }
-        bucket = { count: 0, resetAt: now + currentWindowMs };
-        buckets.set(key, bucket);
+      if (bucket.capacityExceeded) {
+        res.setHeader('retry-after', '1');
+        return res.status(503).json({
+          error: { code: 'RATE_LIMIT_CAPACITY', message: 'Limite temporário de clientes atingido.' }
+        });
       }
 
-      bucket.count += 1;
       const remaining = Math.max(0, currentMax - bucket.count);
       res.setHeader('x-ratelimit-limit', String(currentMax));
       res.setHeader('x-ratelimit-remaining', String(remaining));
