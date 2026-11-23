@@ -4,7 +4,8 @@ import {
   requireExecutionAccess,
   requireIntegrationAccess,
   requireMaster,
-  requireScope
+  requireScope,
+  requireGlobalScope
 } from '../middleware/authorization.js';
 import {
   createIntegrationSchema,
@@ -202,7 +203,7 @@ export function createV1Router({ useCases, apiClientRepository, executionReposit
       });
     });
 
-  router.get('/observability/metrics', requireScope('observability:read'), async (req, res) => {
+  router.get('/observability/metrics', requireGlobalScope('observability:read'), async (req, res) => {
     const rawWindow = req.query.windowHours;
     const windowHours = rawWindow === undefined ? 24 : Number(rawWindow);
     if (!Number.isInteger(windowHours) || windowHours < 1 || windowHours > 720) {

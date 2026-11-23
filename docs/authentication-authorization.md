@@ -21,7 +21,7 @@ Os escopos permitidos são:
 - `executions:read`: consultar execuções e seus eventos.
 - `executions:write`: iniciar e cancelar operações.
 - `executions:reconcile`: consultar a reconciliação de execuções interrompidas.
-- `observability:read`: consultar métricas agregadas.
+- `observability:read`: consultar métricas agregadas; exige `integrationIds: null`, pois as métricas não são segmentadas por integração.
 
 A criação de integrações e a administração de credenciais permanecem exclusivas da credencial master. Um cliente recebe apenas os escopos explicitamente concedidos. Ausência de escopo retorna 403.
 

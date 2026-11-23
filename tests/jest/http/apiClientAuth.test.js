@@ -135,5 +135,23 @@ describe('API client authentication and authorization', () => {
     const globalResponse = await request(app).get('/api/v1/integrations')
       .set('Authorization', 'Bearer ' + global.body.credential).expect(200);
     expect(globalResponse.body.data.map((item) => item.id)).toContain(integration.body.data.id);
+
+    const scopedMetrics = await master(request(app).post('/api/v1/clients'))
+      .send({
+        name: 'Scoped metrics client',
+        scopes: ['observability:read'],
+        integrationIds: [integration.body.data.id]
+      }).expect(201);
+    await request(app).get('/api/v1/observability/metrics')
+      .set('Authorization', 'Bearer ' + scopedMetrics.body.credential).expect(403);
+
+    const globalMetrics = await master(request(app).post('/api/v1/clients'))
+      .send({
+        name: 'Global metrics client',
+        scopes: ['observability:read'],
+        integrationIds: null
+      }).expect(201);
+    await request(app).get('/api/v1/observability/metrics')
+      .set('Authorization', 'Bearer ' + globalMetrics.body.credential).expect(200);
   });
 });

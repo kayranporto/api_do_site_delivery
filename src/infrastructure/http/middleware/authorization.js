@@ -35,3 +35,16 @@ export function requireExecutionAccess(executionRepository) {
     return next();
   };
 }
+
+/** Métricas agregadas exigem escopo global para não revelar dados de integrações alheias. */
+export function requireGlobalScope(scope) {
+  return (req, res, next) => {
+    if (req.auth?.isMaster
+      || (req.auth?.scopes?.includes(scope) && req.auth?.integrationIds === null)) {
+      return next();
+    }
+    return res.status(403).json({
+      error: { code: 'INSUFFICIENT_SCOPE', message: 'Esta operação exige escopo global.', requestId: req.requestId }
+    });
+  };
+}
