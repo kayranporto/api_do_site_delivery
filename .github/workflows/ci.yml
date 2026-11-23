@@ -39,3 +39,53 @@ jobs:
         run: npm run verify:domain
       - name: Run test suites
         run: npm test
+
+  homologation:
+    name: PostgreSQL + Redis integration homologation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: stage17_homologation
+          POSTGRES_USER: stage17
+          POSTGRES_PASSWORD: stage17-only-local-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stage17 -d stage17_homologation"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://stage17:stage17-only-local-password@127.0.0.1:5432/stage17_homologation
+      STAGING_ALLOW_DB_RESET: "true"
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "6379"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          cache: npm
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Redis CLI test client
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y redis-tools
+      - name: Run isolated service homologation
+        run: npm run test:integration

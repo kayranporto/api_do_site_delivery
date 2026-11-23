@@ -4,7 +4,7 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 a 16 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas, monitoramento centralizado e dashboard administrativo.
+Etapas 1 a 17 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas, monitoramento centralizado e dashboard administrativo.
 
 O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, calibrar os limites de alerta por ambiente e integrar notificações externas/monitoramento centralizado.
 
@@ -66,7 +66,9 @@ Campo **integrationIds** omitido significa nenhum acesso a integrações; uma li
 
 ## Testes
 
-Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions executa npm ci e npm test em pushes e pull requests para main. Confira o resultado real na aba Actions.
+Execute **npm test** para Jest e testes Node.js. Para homologar serviços reais locais (PostgreSQL 16 e Redis 7) em uma base descartável chamada `stage17_homologation`, configure `DATABASE_URL`, `STAGING_ALLOW_DB_RESET=true`, `REDIS_HOST=127.0.0.1` e `REDIS_PORT=6379`, depois execute **npm run test:integration**. O teste recusa hosts fora de loopback e qualquer banco cujo nome não seja o da base de homologação.
+
+O CI executa testes nas linhas Node.js 22/24/26 e um job separado de integração com PostgreSQL e Redis efêmeros. Confira o resultado real na aba Actions e consulte `docs/homologation-stage17.md`.
 
 ## Estrutura
 
@@ -87,3 +89,8 @@ Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-obser
 A configuração rejeita valores de `NODE_ENV` desconhecidos, segredos de exemplo, tokens com espaços e reutilização do mesmo segredo entre API master, Redis, métricas e webhook. Origens CORS em produção devem ser HTTPS. URLs de webhook não aceitam credenciais, query string ou fragmento.
 
 As respostas de `/api/v1` usam `Cache-Control: no-store`, e o Express não confia em cabeçalhos de proxy por padrão. O CI executa testes nas linhas LTS 22, 24 e 26, auditoria de dependências com `npm audit` e verificação das fronteiras arquiteturais. O Dependabot acompanha atualizações de npm e GitHub Actions. Consulte `docs/security-review.md` antes de qualquer implantação.
+
+
+## Homologação automatizada — Etapa 17
+
+O job de homologação usa PostgreSQL 16 e Redis 7 efêmeros, aplica as migrations versionadas e exercita a API, credenciais, quotas, contadores Redis, readiness e os fluxos de retry/recuperação do worker. O adaptador do provedor é simulado para evitar efeitos colaterais externos; a homologação contra sandbox de cada provedor ainda depende das credenciais e endpoints da implantação. Veja `docs/homologation-stage17.md`.

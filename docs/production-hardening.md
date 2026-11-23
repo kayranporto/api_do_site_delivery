@@ -14,7 +14,7 @@ O Redis compartilhado não substitui proteção contra DDoS, WAF, controle de eg
 
 ## CI
 
-O workflow .github/workflows/ci.yml executa npm ci e npm test em push para main e pull requests direcionados a main, usando Node.js 20. A existência do workflow não significa que a execução já passou: confira o status em Actions após o push.
+O workflow .github/workflows/ci.yml executa npm ci e npm test em push para main e pull requests direcionados a main, usando Node.js 22, 24 e 26. A existência do workflow não significa que a execução já passou: confira o status em Actions após o push.
 
 ## Retenção dos eventos
 
@@ -68,3 +68,10 @@ Todas as respostas de `/api/v1`, incluindo falhas de autenticação, recebem `Ca
 O workflow executa em Node.js 22, 24 e 26, faz `npm audit --audit-level=high`, verifica as fronteiras arquiteturais e roda os testes. As actions do workflow usam versões com runtime Node 24, e o checkout não persiste a credencial Git. Dependabot acompanha semanalmente dependências npm e actions.
 
 Consulte `docs/security-review.md` para o checklist de implantação e limitações que ainda dependem da infraestrutura real.
+
+
+## Homologação automatizada — Etapa 17
+
+O workflow adiciona job separado com PostgreSQL 16 e Redis 7 efêmeros. Ele aplica as migrations 001–005 em base descartável, verifica readiness e quotas compartilhadas via Redis REST, testa criação/escopo/revogação de credenciais, e executa retry e recuperação do worker sobre PostgreSQL real. O provedor externo é simulado para que os testes não provoquem efeitos fora do ambiente temporário. A ponte REST de teste escuta apenas em loopback e não é usada no runtime da API. Consulte `docs/homologation-stage17.md`.
+
+Essa suíte não configura TLS, DNS, WAF, backups, serviços gerenciados, proxy reverso ou sandbox de terceiros; esses itens ainda precisam ser verificados no ambiente real.

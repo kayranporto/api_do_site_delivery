@@ -33,6 +33,10 @@
 - A auditoria npm desta revisão reportou 18 alertas moderados em dependências de desenvolvimento transitivas do Jest (cadeia `glob`/`minimatch`); não houve alerta de alta ou crítica gravidade no limite aplicado. O CI também passa a exigir ausência de alertas moderados ou superiores nas dependências de produção. Os alertas de desenvolvimento permanecem registrados para atualização via Dependabot.
 - O CI verifica vulnerabilidades reportadas pelo npm no momento de cada execução; isso não substitui análise contínua, SCA dedicada, análise estática, secret scanning, pentest ou revisão de configuração da hospedagem.
 
+## Homologação técnica — Etapa 17
+
+O job separado de integração usa PostgreSQL 16 e Redis 7 efêmeros, aplica migrations reais em banco local descartável e testa a API/worker com repositórios persistentes. A rotina de teste recusa hosts fora de loopback, base com nome diferente de `stage17_homologation` e ausência da variável explícita de reset. O Redis REST bridge é limitado a loopback, token efêmero e comandos permitidos. Nenhum sandbox ou endpoint externo de provedor é chamado.
+
 ## Resultado
 
 Esta etapa endurece defaults e validações no repositório, mas **não declara o sistema pronto para produção**. A prontidão final depende da execução do checklist em uma infraestrutura real e de uma revisão operacional específica desse ambiente.
