@@ -37,6 +37,12 @@
 
 O job separado de integração usa PostgreSQL 16 e Redis 7 efêmeros, aplica migrations reais em banco local descartável e testa a API/worker com repositórios persistentes. A rotina de teste recusa hosts fora de loopback, base com nome diferente de `stage17_homologation` e ausência da variável explícita de reset. O Redis REST bridge é limitado a loopback, token efêmero e comandos permitidos. Nenhum sandbox ou endpoint externo de provedor é chamado.
 
+## Recuperação e rollback — Etapa 18
+
+A rotina automatizada `npm run verify:backup` realiza dump/restore em bases PostgreSQL locais e descartáveis, e compara fingerprints das tabelas principais. Ela não conecta em hosts remotos e recusa operar sem a base `stage17_homologation` e a confirmação `STAGING_ALLOW_DB_RESET=true`. A execução no CI demonstra a operação técnica de backup/restauração em ambiente isolado, mas não substitui backup gerenciado, PITR, retenção, criptografia ou restauração periódica do provedor real.
+
+A atualização Dependabot de `dotenv` para 18.0.10 foi incorporada. Os 18 alertas moderados do conjunto de desenvolvimento continuam identificados e não foram escondidos por overrides inseguros; a auditoria de produção reportou zero vulnerabilidades com limite moderado. O motivo e as versões corrigidas estão documentados em `docs/backup-restore-rollback.md`.
+
 ## Resultado
 
 Esta etapa endurece defaults e validações no repositório, mas **não declara o sistema pronto para produção**. A prontidão final depende da execução do checklist em uma infraestrutura real e de uma revisão operacional específica desse ambiente.

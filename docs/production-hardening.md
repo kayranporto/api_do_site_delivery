@@ -75,3 +75,10 @@ Consulte `docs/security-review.md` para o checklist de implantação e limitaç�
 O workflow adiciona job separado com PostgreSQL 16 e Redis 7 efêmeros. Ele aplica as migrations 001–005 em base descartável, verifica readiness e quotas compartilhadas via Redis REST, testa criação/escopo/revogação de credenciais, e executa retry e recuperação do worker sobre PostgreSQL real. O provedor externo é simulado para que os testes não provoquem efeitos fora do ambiente temporário. A ponte REST de teste escuta apenas em loopback e não é usada no runtime da API. Consulte `docs/homologation-stage17.md`.
 
 Essa suíte não configura TLS, DNS, WAF, backups, serviços gerenciados, proxy reverso ou sandbox de terceiros; esses itens ainda precisam ser verificados no ambiente real.
+
+
+## Backup, restauração e rollback — Etapa 18
+
+O job de homologação executa também `npm run verify:backup`: cria um arquivo temporário PostgreSQL custom-format, restaura em uma base de nome reservado, compara fingerprints de seis tabelas e remove os artefatos temporários. A rotina só aceita host loopback, banco `stage17_homologation` e `STAGING_ALLOW_DB_RESET=true`; não pode ser usada para backup ou restauração de produção.
+
+A infraestrutura real ainda precisa configurar backups gerenciados/PITR, criptografia, armazenamento separado, retenção, monitoramento de falhas e testes regulares de restauração. Antes de promover releases, defina RPO/RTO e pratique rollback da aplicação. O repositório não contém migrations down automáticas: nunca reverta uma aplicação sem avaliar compatibilidade com o schema PostgreSQL 005. Consulte `docs/backup-restore-rollback.md`.

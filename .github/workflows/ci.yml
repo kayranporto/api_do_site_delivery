@@ -41,7 +41,7 @@ jobs:
         run: npm test
 
   homologation:
-    name: PostgreSQL + Redis integration homologation
+    name: PostgreSQL + Redis integration and backup verification
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -83,9 +83,12 @@ jobs:
           node-version: 24
           cache: npm
           package-manager-cache: false
-      - name: Install dependencies
-        run: npm ci
-      - name: Install Redis CLI test client
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y redis-tools
+      - name: Install dependencies and database test clients
+        run: |
+          npm ci
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y redis-tools postgresql-client
       - name: Run isolated service homologation
         run: npm run test:integration
+      - name: Verify PostgreSQL backup and restore
+        run: npm run verify:backup

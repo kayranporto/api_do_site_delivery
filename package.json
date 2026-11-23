@@ -17,7 +17,8 @@
     "dev": "node --watch src/server.js",
     "worker": "node src/worker.js",
     "worker:once": "node src/worker.js --once",
-    "test:integration": "node --test tests/integration/stage17-homologation.test.js"
+    "test:integration": "node --test tests/integration/stage17-homologation.test.js",
+    "verify:backup": "node scripts/verify-postgres-backup.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

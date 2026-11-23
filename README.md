@@ -4,7 +4,7 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 a 17 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas, monitoramento centralizado e dashboard administrativo.
+Etapas 1 a 18 implementadas/revisadas tecnicamente: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas, monitoramento centralizado e dashboard administrativo.
 
 O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, calibrar os limites de alerta por ambiente e integrar notificações externas/monitoramento centralizado.
 
@@ -68,7 +68,7 @@ Campo **integrationIds** omitido significa nenhum acesso a integrações; uma li
 
 Execute **npm test** para Jest e testes Node.js. Para homologar serviços reais locais (PostgreSQL 16 e Redis 7) em uma base descartável chamada `stage17_homologation`, configure `DATABASE_URL`, `STAGING_ALLOW_DB_RESET=true`, `REDIS_HOST=127.0.0.1` e `REDIS_PORT=6379`, depois execute **npm run test:integration**. O teste recusa hosts fora de loopback e qualquer banco cujo nome não seja o da base de homologação.
 
-O CI executa testes nas linhas Node.js 22/24/26 e um job separado de integração com PostgreSQL e Redis efêmeros. Confira o resultado real na aba Actions e consulte `docs/homologation-stage17.md`.
+O CI executa testes nas linhas Node.js 22/24/26 e um job separado de integração com PostgreSQL e Redis efêmeros. Para verificar backup/restauração na base temporária do CI, o job também executa `npm run verify:backup`, que exige exclusivamente o banco `stage17_homologation` em loopback. Confira o resultado real na aba Actions e consulte `docs/homologation-stage17.md` e `docs/backup-restore-rollback.md`.
 
 ## Estrutura
 
@@ -94,3 +94,12 @@ As respostas de `/api/v1` usam `Cache-Control: no-store`, e o Express não confi
 ## Homologação automatizada — Etapa 17
 
 O job de homologação usa PostgreSQL 16 e Redis 7 efêmeros, aplica as migrations versionadas e exercita a API, credenciais, quotas, contadores Redis, readiness e os fluxos de retry/recuperação do worker. O adaptador do provedor é simulado para evitar efeitos colaterais externos; a homologação contra sandbox de cada provedor ainda depende das credenciais e endpoints da implantação. Veja `docs/homologation-stage17.md`.
+
+
+## Revisão final e recuperação — Etapa 18
+
+A rotina `npm run verify:backup` demonstra backup em formato custom do PostgreSQL e restauração em um segundo banco temporário isolado, comparando fingerprints de seis tabelas. Ela só aceita loopback, o nome de base `stage17_homologation` e `STAGING_ALLOW_DB_RESET=true`; não é uma rotina para produção. Consulte `docs/backup-restore-rollback.md` para política recomendada de backup gerenciado/PITR, verificação de restauração, RPO/RTO e rollback.
+
+A atualização de `dotenv` para 18.0.10 foi incorporada. A auditoria npm de produção está limpa no limite moderado; permanecem 18 alertas moderados em ferramentas de desenvolvimento ligadas ao Jest, documentados sem forçar overrides de major potencialmente incompatíveis.
+
+A conclusão técnica desta etapa não configura backup real, PITR, restauração real, domínio, TLS ou deploy. Esses itens continuam dependentes da infraestrutura escolhida.
