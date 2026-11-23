@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Administração | Generic Integration API</title>
+  <link rel="stylesheet" href="/admin/assets/styles.css">
+  <script defer src="/admin/assets/app.js"></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <main id="loginPanel" class="login-wrap">
+    <section class="login-card">
+      <div class="brand-mark" aria-hidden="true">GI</div>
+      <p class="eyebrow">GENERIC INTEGRATION API</p>
+      <h1>Console administrativo</h1>
+      <p class="muted login-copy">Acompanhe a saúde dos serviços, o desempenho HTTP, alertas e consumo das credenciais.</p>
+      <form id="loginForm">
+        <label for="adminToken">Credencial master</label>
+        <input id="adminToken" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="Cole sua API_ACCESS_TOKEN" required minlength="32">
+        <button id="connectButton" class="button button-primary button-full" type="submit">Entrar no painel</button>
+        <p id="loginMessage" class="form-message" role="status" aria-live="polite"></p>
+      </form>
+      <div class="security-note"><span class="lock-dot"></span> A credencial fica somente na memória desta aba e é apagada ao sair ou recarregar.</div>
+    </section>
+    <p class="login-foot">Acesso restrito · Não compartilhe sua credencial master</p>
+  </main>
+
+  <main id="dashboard" class="dashboard hidden">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark small" aria-hidden="true">GI</div>
+        <div>
+          <div class="brand-name">Integration API</div>
+          <div class="brand-subtitle">ADMIN CONTROL ROOM</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="connectionBadge" class="connection-badge"><span class="status-dot"></span> Conectado</span>
+        <span id="lastUpdated" class="last-updated">Aguardando atualização</span>
+        <button id="refreshButton" class="button button-quiet" type="button">Atualizar</button>
+        <button id="logoutButton" class="button button-outline" type="button">Sair</button>
+      </div>
+    </header>
+
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">VISÃO OPERACIONAL</p>
+        <h1>Painel de monitoramento</h1>
+        <p class="muted">Visão da instância atual · Atualização automática a cada 30 segundos</p>
+      </div>
+      <div id="overallStatus" class="overall-status status-neutral"><span class="status-dot"></span><span>Verificando serviços</span></div>
+    </section>
+
+    <section class="section-block">
+      <div class="section-heading">
+        <div><p class="eyebrow">DEPENDÊNCIAS</p><h2>Estado dos serviços</h2></div>
+        <span class="section-meta">Liveness e readiness</span>
+      </div>
+      <div id="serviceGrid" class="service-grid">
+        <article class="service-card skeleton-card"></article>
+        <article class="service-card skeleton-card"></article>
+        <article class="service-card skeleton-card"></article>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <div class="section-heading">
+        <div><p class="eyebrow">ÚLTIMOS 5 MINUTOS</p><h2>Desempenho HTTP</h2></div>
+        <span id="performanceWindow" class="section-meta">Janela de 5 minutos</span>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi-card">
+          <span class="kpi-label">Requisições concluídas</span>
+          <strong id="kpiRequests" class="kpi-value">—</strong>
+          <span class="kpi-foot">Na janela observada</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Latência p95</span>
+          <strong id="kpiLatency" class="kpi-value">—</strong>
+          <span class="kpi-foot">Milissegundos</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Respostas 5xx</span>
+          <strong id="kpiErrors" class="kpi-value">—</strong>
+          <span id="kpiErrorRate" class="kpi-foot">Taxa de erro</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Memória RSS</span>
+          <strong id="kpiMemory" class="kpi-value">—</strong>
+          <span class="kpi-foot">Processo da instância atual</span>
+        </article>
+      </div>
+      <div class="detail-grid">
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Respostas por status</h3><p class="muted">Distribuição HTTP na janela</p></div></div>
+          <div id="statusBreakdown" class="status-breakdown empty-state">Carregando dados…</div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Rotas mais utilizadas</h3><p class="muted">Até 20 combinações método/rota</p></div></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Rota</th><th>Req.</th><th>5xx</th><th>Lat. média</th></tr></thead>
+              <tbody id="routeTable"><tr><td colspan="4" class="empty-state">Carregando dados…</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <div class="section-heading">
+        <div><p class="eyebrow">CONDIÇÕES OPERACIONAIS</p><h2>Alertas</h2></div>
+        <span id="alertStatus" class="section-meta">Aguardando avaliação</span>
+      </div>
+      <div class="detail-grid">
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Alertas atuais</h3><p class="muted">Regras avaliadas na janela configurada</p></div></div>
+          <div id="activeAlerts" class="alert-list empty-state">Carregando alertas…</div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Atividade recente de alertas</h3><p class="muted">Histórico volátil da instância, até 100 eventos</p></div></div>
+          <div id="alertHistory" class="history-list empty-state">Carregando histórico…</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <div class="section-heading">
+        <div><p class="eyebrow">CREDENCIAIS E CONSUMO</p><h2>Clientes da API</h2></div>
+        <span id="clientCount" class="section-meta">— credenciais</span>
+      </div>
+      <div class="detail-grid usage-grid">
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Consumo diário</h3><p class="muted">Últimos 30 dias · UTC</p></div></div>
+          <label class="select-label" for="clientSelect">Selecionar credencial</label>
+          <select id="clientSelect" class="select-control"><option value="">Nenhuma credencial</option></select>
+          <div class="usage-summary"><strong id="usageTotal">—</strong><span id="usageCaption">Requisições no período</span></div>
+          <div id="usageChart" class="usage-chart empty-state">Selecione uma credencial para consultar o consumo.</div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Credenciais cadastradas</h3><p class="muted">Situação e limites por cliente</p></div></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Cliente</th><th>Estado</th><th>Limite</th><th>Expiração</th></tr></thead>
+              <tbody id="clientTable"><tr><td colspan="4" class="empty-state">Carregando clientes…</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <div class="section-heading">
+        <div><p class="eyebrow">EXECUÇÕES E EVENTOS</p><h2>Resumo operacional</h2></div>
+        <span class="section-meta">Últimas 24 horas para eventos</span>
+      </div>
+      <div class="detail-grid">
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Execuções por estado</h3><p class="muted">Estado atual das execuções persistidas</p></div></div>
+          <div id="executionStates" class="state-list empty-state">Carregando métricas…</div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><h3>Eventos operacionais</h3><p class="muted">Distribuição por severidade e tipo</p></div></div>
+          <div id="eventSummary" class="state-list empty-state">Carregando métricas…</div>
+        </article>
+      </div>
+    </section>
+
+    <footer class="dashboard-footer">
+      <span>Generic Integration API · Console administrativo</span>
+      <span>As métricas HTTP e o histórico de alertas são locais à instância e voláteis.</span>
+    </footer>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

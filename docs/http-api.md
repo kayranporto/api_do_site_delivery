@@ -29,6 +29,8 @@
 | Método | Caminho | Finalidade |
 |---|---|---|
 | GET | `/health` | Liveness público |
+| GET | `/admin` | Dashboard administrativo (credencial master solicitada na interface) |
+| GET | `/api/v1/observability/alerts/history` | Histórico recente de alertas (master) |
 | GET | `/readyz` | Readiness de PostgreSQL/Redis configurados |
 | GET | `/metrics` | Métricas Prometheus (token METRICS_ACCESS_TOKEN) |
 | POST | `/api/v1/integrations` | Criar integração inativa |
@@ -155,3 +157,8 @@ Os dois endpoints /observability exigem escopo global `observability:read`. Cons
 - `GET /metrics`: exposition Prometheus 0.0.4, protegida por `METRICS_ACCESS_TOKEN` dedicado (não usa o token master).
 - O monitor de alertas envia notificações JSON para `ALERT_WEBHOOK_URL` quando configurado; consulte `docs/monitoring-alerts.md`.
 - `ALERT_WEBHOOK_URL`: inicia monitor periódico e notificações JSON `firing/resolved`; cooldown configurável.
+
+
+## Etapa 14 — Dashboard administrativo
+
+Abra `/admin` no host da API. A página estática não contém credenciais; o operador informa a credencial master e o navegador chama endpoints administrativos autenticados. O token permanece somente na memória da aba e não é persistido no armazenamento do navegador. O dashboard consulta clientes, consumo diário, métricas, readiness, alertas e histórico de alertas. Consulte `docs/admin-dashboard.md`.

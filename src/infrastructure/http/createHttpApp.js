@@ -1,4 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -123,6 +125,18 @@ export function createHttpApp({
     exposedHeaders: ['X-Request-Id'],
     maxAge: 600
   }));
+  const adminDirectory = fileURLToPath(new URL('../../../public/admin/', import.meta.url));
+  app.use('/admin/assets', express.static(resolve(adminDirectory, 'assets'), {
+    dotfiles: 'deny',
+    index: false,
+    fallthrough: true,
+    maxAge: 0
+  }));
+  app.get('/admin', (_req, res) => {
+    res.setHeader('cache-control', 'no-store');
+    res.setHeader('x-robots-tag', 'noindex, nofollow');
+    return res.sendFile(resolve(adminDirectory, 'index.html'));
+  });
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
   app.get('/readyz', async (_req, res) => {
     const results = await Promise.all(Object.entries(checks).map(async ([name, check]) => {
@@ -180,6 +194,7 @@ export function createHttpApp({
     rateLimitStore: activeRateLimitStore,
     httpMetrics: activeHttpMetrics,
     alertEvaluator: activeAlertEvaluator,
+    alertMonitor: activeAlertMonitor,
     observabilityWindowMinutes
   }));
   app.use((_req, res) => res.status(404).json({

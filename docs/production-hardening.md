@@ -46,3 +46,14 @@ A URL do webhook é uma configuração de saída: restrinja egress/firewall para
 - O buffer de métricas e a deduplicação do monitor permanecem locais a cada processo; não há agregação entre réplicas nem histórico durável de incidentes.
 - O webhook envia um formato JSON genérico; não há formatação específica para Slack/Discord nem dashboard, SIEM ou exporter OTLP.
 - A implantação ainda precisa de TLS, firewall/egress, gestão/rotação de segredos, backup PostgreSQL e monitoramento externo.
+
+
+## Dashboard administrativo — Etapa 14
+
+A rota `/admin` entrega os arquivos estáticos do console administrativo. O conteúdo estático não contém dados nem segredos; as consultas protegidas continuam exigindo credencial master. O frontend mantém o token somente na memória da aba, não o grava em storage e o apaga em logout/reload. Os arquivos usam a política de segurança de conteúdo do Helmet e os valores retornados são adicionados ao DOM por `textContent`, sem interpolar dados da API como HTML.
+
+O dashboard consome dados dos endpoints protegidos de clientes, consumo, métricas e observabilidade, além de `/readyz`. Ele atualiza a cada 30 segundos, e permite refresh manual e logout.
+
+A rota `GET /api/v1/observability/alerts/history?limit=50` é exclusiva da master; aceita 1 a 100 entradas e devolve `meta.retention=process_memory`. O histórico contém transições firing/resolved e lembretes do monitor, tem capacidade máxima de 100 eventos por instância e é apagado quando o processo reinicia. Não substitui um registro persistente ou compartilhado.
+
+Em produção, exponha o painel somente sobre HTTPS e, preferencialmente, restrinja `/admin` e as rotas administrativas por VPN, allowlist de IP ou proxy de identidade. A credencial master concede acesso global à API; utilize-a somente em estação administrativa confiável, não a distribua a clientes e faça logout ao encerrar a sessão.

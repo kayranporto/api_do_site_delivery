@@ -111,6 +111,7 @@ export function createV1Router({
   rateLimitStore,
   httpMetrics,
   alertEvaluator,
+  alertMonitor,
   observabilityWindowMinutes = 5
 }) {
   const router = Router();
@@ -312,6 +313,27 @@ export function createV1Router({
     return res.json({ data: metrics });
   });
 
+  router.get('/observability/alerts/history', requireMaster, (req, res) => {
+    const rawLimit = req.query.limit;
+    const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_ALERT_HISTORY_LIMIT',
+          message: 'limit deve ser um inteiro entre 1 e 100.',
+          requestId: req.requestId
+        }
+      });
+    }
+    const history = typeof alertMonitor?.getHistory === 'function'
+      ? alertMonitor.getHistory({ limit })
+      : [];
+    return res.json({
+      data: history,
+      meta: { retention: 'process_memory', limit }
+    });
+  });
+
   router.get('/observability/performance', requireGlobalScope('observability:read'), (req, res) => {
     const windowMinutes = parseWindowMinutes(req, res, observabilityWindowMinutes);
     if (windowMinutes === null) return undefined;
@@ -322,7 +344,9 @@ export function createV1Router({
     const windowMinutes = parseWindowMinutes(req, res, observabilityWindowMinutes);
     if (windowMinutes === null) return undefined;
     const performance = httpMetrics.snapshot({ windowMinutes });
-    return res.json({ data: alertEvaluator.evaluate(performance) });
+    const evaluation = alertEvaluator.evaluate(performance);
+    if (typeof alertMonitor?.observe === 'function') alertMonitor.observe(evaluation);
+    return res.json({ data: evaluation });
   });
 
   router.get('/executions/:executionId/events',

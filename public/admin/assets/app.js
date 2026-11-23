@@ -1,0 +1,470 @@
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    token: '',
+    clients: [],
+    selectedClientId: '',
+    refreshTimer: null,
+    busy: false
+  };
+
+  const elements = {
+    loginPanel: $('loginPanel'),
+    dashboard: $('dashboard'),
+    loginForm: $('loginForm'),
+    adminToken: $('adminToken'),
+    loginMessage: $('loginMessage'),
+    connectButton: $('connectButton'),
+    refreshButton: $('refreshButton'),
+    logoutButton: $('logoutButton'),
+    lastUpdated: $('lastUpdated'),
+    connectionBadge: $('connectionBadge'),
+    overallStatus: $('overallStatus'),
+    serviceGrid: $('serviceGrid'),
+    clientSelect: $('clientSelect'),
+    toast: $('toast')
+  };
+
+  function text(element, value) {
+    if (element) element.textContent = value === null || value === undefined ? '—' : String(value);
+  }
+
+  function node(tag, className, value) {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (value !== undefined && value !== null) element.textContent = String(value);
+    return element;
+  }
+
+  function add(parent, child) {
+    parent.appendChild(child);
+    return child;
+  }
+
+  function formatNumber(value, digits = 0) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: digits }).format(number);
+  }
+
+  function formatDate(value) {
+    if (!value) return 'Sem expiração';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? 'Data inválida'
+      : new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+  }
+
+  function formatDateTime(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? '—'
+      : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+  }
+
+  function showToast(message) {
+    text(elements.toast, message);
+    elements.toast.classList.add('visible');
+    window.clearTimeout(showToast.timer);
+    showToast.timer = window.setTimeout(() => elements.toast.classList.remove('visible'), 3200);
+  }
+
+  async function api(path, options = {}) {
+    if (!state.token) throw new Error('Sessão administrativa encerrada.');
+    const response = await fetch(path, {
+      method: options.method ?? 'GET',
+      cache: 'no-store',
+      headers: {
+        authorization: 'Bearer ' + state.token,
+        ...(options.headers ?? {})
+      },
+      signal: options.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = payload?.error?.message || 'Falha HTTP ' + response.status;
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    return payload?.data ?? payload;
+  }
+
+  async function publicApi(path) {
+    const response = await fetch(path, { cache: 'no-store' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok && !(path === '/readyz' && response.status === 503)) {
+      const error = new Error(payload?.error?.message || 'Falha HTTP ' + response.status);
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  }
+
+  function clearSession() {
+    state.token = '';
+    state.clients = [];
+    state.selectedClientId = '';
+    if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+    state.refreshTimer = null;
+    elements.dashboard.classList.add('hidden');
+    elements.loginPanel.classList.remove('hidden');
+    elements.adminToken.value = '';
+    elements.loginMessage.textContent = '';
+    elements.loginMessage.className = 'form-message';
+    text(elements.connectionBadge, 'Desconectado');
+    elements.adminToken.focus();
+  }
+
+  function setConnection(connected, label) {
+    elements.connectionBadge.className = connected ? 'connection-badge' : 'connection-badge status-bad';
+    elements.connectionBadge.replaceChildren();
+    add(elements.connectionBadge, node('span', 'status-dot'));
+    add(elements.connectionBadge, node('span', '', label || (connected ? 'Conectado' : 'Desconectado')));
+  }
+
+  function renderServices(health, readiness) {
+    const items = [
+      { name: 'API HTTP', description: 'Liveness do processo', status: health?.status === 'ok' ? 'online' : 'offline' },
+      ...Object.entries(readiness?.checks ?? {}).map(([name, value]) => ({
+        name: name === 'rateLimitStore' ? 'Redis / Rate limit' : name === 'postgres' ? 'PostgreSQL' : name,
+        description: 'Verificação de readiness',
+        status: value === 'ok' ? 'online' : 'offline'
+      }))
+    ];
+    if (items.length === 1) {
+      items.push({ name: 'PostgreSQL', description: 'Não configurado ou não verificado', status: 'unknown' });
+      items.push({ name: 'Redis', description: 'Não configurado ou não verificado', status: 'unknown' });
+    }
+    elements.serviceGrid.replaceChildren();
+    for (const item of items) {
+      const card = node('article', 'service-card');
+      const info = node('div');
+      add(info, node('div', 'service-name', item.name));
+      add(info, node('div', 'service-description', item.description));
+      const stateBox = node('span', 'service-state ' + (
+        item.status === 'online' ? 'state-online' : item.status === 'offline' ? 'state-offline' : 'state-unknown'
+      ));
+      add(stateBox, node('span', 'status-dot'));
+      add(stateBox, node('span', '', item.status === 'online' ? 'Operacional' : item.status === 'offline' ? 'Indisponível' : 'Não verificado'));
+      add(card, info);
+      add(card, stateBox);
+      add(elements.serviceGrid, card);
+    }
+    const ready = readiness?.status === 'ready' && health?.status === 'ok';
+    elements.overallStatus.className = 'overall-status ' + (ready ? 'status-good' : readiness?.status === 'not_ready' ? 'status-bad' : 'status-neutral');
+    elements.overallStatus.replaceChildren();
+    add(elements.overallStatus, node('span', 'status-dot'));
+    add(elements.overallStatus, node('span', '', ready ? 'Serviços prontos' : readiness?.status === 'not_ready' ? 'Dependência indisponível' : 'Prontidão parcial'));
+  }
+
+  function renderPerformance(performance) {
+    text($('kpiRequests'), formatNumber(performance?.totalRequests));
+    text($('kpiLatency'), formatNumber(performance?.latencyMs?.p95, 1) + ' ms');
+    text($('kpiErrors'), formatNumber(performance?.serverErrors));
+    text($('kpiErrorRate'), formatNumber(performance?.errorRatePercent, 2) + '% de respostas 5xx');
+    text($('kpiMemory'), formatNumber(performance?.process?.memoryMb?.rss, 1) + ' MB');
+    text($('performanceWindow'), 'Janela de ' + (performance?.windowMinutes ?? 5) + ' minutos');
+
+    const breakdown = $('statusBreakdown');
+    breakdown.replaceChildren();
+    const statuses = Object.entries(performance?.byStatus ?? {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+    if (!statuses.length) {
+      breakdown.appendChild(node('p', 'empty-state', 'Nenhuma resposta concluída na janela.'));
+    }
+    const maxCount = Math.max(1, ...statuses.map(([, count]) => Number(count)));
+    for (const [status, count] of statuses) {
+      const line = node('div', 'status-line');
+      add(line, node('span', 'status-code', status));
+      const track = node('div', 'status-track');
+      const fill = node('div', 'status-fill ' + (status.startsWith('2') ? 'good' : status.startsWith('4') ? 'warning' : status.startsWith('5') ? 'bad' : ''));
+      fill.style.width = (Math.max(0, Number(count)) / maxCount * 100) + '%';
+      add(track, fill);
+      add(line, track);
+      add(line, node('span', 'status-count', formatNumber(count)));
+      add(breakdown, line);
+    }
+
+    const routeTable = $('routeTable');
+    routeTable.replaceChildren();
+    const routes = performance?.byRoute ?? [];
+    if (!routes.length) {
+      const row = node('tr');
+      const cell = node('td', 'empty-state', 'Nenhuma rota registrada na janela.');
+      cell.colSpan = 4;
+      add(row, cell);
+      add(routeTable, row);
+    } else {
+      for (const route of routes) {
+        const row = node('tr');
+        add(row, node('td', '', route.method + ' ' + route.route));
+        add(row, node('td', 'numeric', formatNumber(route.requests)));
+        add(row, node('td', 'numeric', formatNumber(route.errors5xx)));
+        add(row, node('td', 'numeric', formatNumber(route.averageLatencyMs, 1) + ' ms'));
+        add(routeTable, row);
+      }
+    }
+  }
+
+  function renderAlerts(alerts) {
+    const active = $('activeAlerts');
+    active.replaceChildren();
+    const items = alerts?.alerts ?? [];
+    text($('alertStatus'), alerts?.status === 'firing' ? items.length + ' alertas ativos' : 'Nenhum alerta ativo');
+    if (!items.length) {
+      active.appendChild(node('p', 'empty-state', 'Nenhuma regra de alerta está disparando.'));
+      return;
+    }
+    for (const alert of items) {
+      const item = node('article', 'alert-item');
+      const top = node('div', 'alert-top');
+      add(top, node('span', 'alert-code', alert.code));
+      add(top, node('span', 'severity severity-' + (alert.severity === 'critical' ? 'critical' : 'warning'), alert.severity));
+      add(item, top);
+      add(item, node('p', 'alert-message', alert.message));
+      add(item, node('div', 'alert-meta', 'Observado: ' + formatNumber(alert.observed, 2) + ' · Limite: ' + formatNumber(alert.threshold, 2)));
+      add(active, item);
+    }
+  }
+
+  function renderAlertHistory(history) {
+    const root = $('alertHistory');
+    root.replaceChildren();
+    if (!history?.length) {
+      root.appendChild(node('p', 'empty-state', 'Nenhuma transição de alerta registrada nesta instância.'));
+      return;
+    }
+    for (const event of history) {
+      const item = node('article', 'history-item');
+      const top = node('div', 'history-top');
+      add(top, node('span', 'alert-code', event.code));
+      const label = event.status === 'resolved' ? 'Resolvido' : event.status === 'reminder' ? 'Lembrete' : 'Disparado';
+      add(top, node('span', 'history-status ' + event.status, label));
+      add(item, top);
+      add(item, node('div', 'history-meta', formatDateTime(event.timestamp) + ' · ' + (event.severity ?? 'warning')));
+      add(root, item);
+    }
+  }
+
+  function clientStatus(client) {
+    if (client.revokedAt) return { label: 'Revogada', className: 'pill-revoked' };
+    if (client.expiresAt && new Date(client.expiresAt).getTime() <= Date.now()) {
+      return { label: 'Expirada', className: 'pill-expired' };
+    }
+    return { label: 'Ativa', className: 'pill-active' };
+  }
+
+  function renderClients(clients) {
+    state.clients = Array.isArray(clients) ? clients : [];
+    text($('clientCount'), formatNumber(state.clients.length) + ' credenciais');
+    const table = $('clientTable');
+    table.replaceChildren();
+    const select = elements.clientSelect;
+    const previous = state.selectedClientId;
+    select.replaceChildren();
+    add(select, new Option('Selecione uma credencial', ''));
+    for (const client of state.clients) {
+      const status = clientStatus(client);
+      const row = node('tr');
+      const nameCell = node('td');
+      add(nameCell, node('span', 'client-name', client.name));
+      add(nameCell, node('span', 'client-prefix', client.keyPrefix));
+      add(row, nameCell);
+      add(row, node('td')).appendChild(node('span', 'pill ' + status.className, status.label));
+      add(row, node('td', 'numeric', formatNumber(client.rateLimitMax) + ' / ' + Math.round(client.rateLimitWindowMs / 1000) + 's'));
+      add(row, node('td', '', formatDate(client.expiresAt)));
+      add(table, row);
+      add(select, new Option(client.name + ' · ' + client.keyPrefix, client.id));
+    }
+    if (!state.clients.length) {
+      const row = node('tr');
+      const cell = node('td', 'empty-state', 'Nenhuma credencial cadastrada.');
+      cell.colSpan = 4;
+      add(row, cell);
+      add(table, row);
+      state.selectedClientId = '';
+      text($('usageTotal'), '—');
+      text($('usageCaption'), 'Nenhuma credencial disponível');
+      $('usageChart').replaceChildren(node('p', 'empty-state', 'Crie uma credencial para acompanhar o consumo.'));
+      return;
+    }
+    const hasPrevious = state.clients.some((client) => client.id === previous);
+    state.selectedClientId = hasPrevious ? previous : state.clients[0].id;
+    select.value = state.selectedClientId;
+  }
+
+  function renderUsage(usage) {
+    text($('usageTotal'), formatNumber(usage?.totalRequests));
+    text($('usageCaption'), 'Requisições nos últimos ' + (usage?.days ?? 30) + ' dias');
+    const chart = $('usageChart');
+    chart.replaceChildren();
+    const daily = usage?.daily ?? [];
+    const max = Math.max(1, ...daily.map((item) => Number(item.requests)));
+    for (const item of daily) {
+      const column = node('div', 'usage-column');
+      const wrap = node('div', 'usage-bar-wrap');
+      const bar = node('div', 'usage-bar');
+      const count = Number(item.requests) || 0;
+      bar.style.height = (count === 0 ? 2 : Math.max(4, count / max * 100)) + '%';
+      bar.title = formatDate(item.date) + ': ' + formatNumber(count) + ' requisições';
+      add(wrap, bar);
+      add(column, wrap);
+      add(column, node('span', 'usage-date', item.date?.slice(5) ?? ''));
+      add(chart, column);
+    }
+    if (!daily.length) chart.appendChild(node('p', 'empty-state', 'Histórico de consumo indisponível.'));
+  }
+
+  function renderOperationalMetrics(metrics) {
+    const states = $('executionStates');
+    states.replaceChildren();
+    const executionEntries = Object.entries(metrics?.executionsByStatus ?? {});
+    const total = executionEntries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
+    add(states, node('div', 'state-row', ''));
+    states.lastChild.replaceChildren(node('span', '', 'Total de execuções'), node('strong', '', formatNumber(total)));
+    for (const [status, count] of executionEntries) {
+      const row = node('div', 'state-row');
+      add(row, node('span', '', status));
+      add(row, node('strong', '', formatNumber(count)));
+      add(states, row);
+    }
+
+    const events = metrics?.events ?? {};
+    const eventSummary = $('eventSummary');
+    eventSummary.replaceChildren();
+    const totalRow = node('div', 'state-row');
+    add(totalRow, node('span', '', 'Eventos na janela'));
+    add(totalRow, node('strong', '', formatNumber(events.total ?? 0)));
+    add(eventSummary, totalRow);
+    for (const [severity, count] of Object.entries(events.bySeverity ?? {})) {
+      const row = node('div', 'state-row');
+      add(row, node('span', '', 'Severidade: ' + severity));
+      add(row, node('strong', '', formatNumber(count)));
+      add(eventSummary, row);
+    }
+    for (const [type, count] of Object.entries(events.byType ?? {})) {
+      const row = node('div', 'state-row');
+      add(row, node('span', '', type));
+      add(row, node('strong', '', formatNumber(count)));
+      add(eventSummary, row);
+    }
+    if (!executionEntries.length) states.appendChild(node('p', 'empty-state', 'Nenhuma execução contabilizada.'));
+    if (!events.total) eventSummary.appendChild(node('p', 'empty-state', 'Nenhum evento registrado na janela.'));
+  }
+
+  async function loadUsage(clientId) {
+    if (!clientId || !state.token) return;
+    const usage = await api('/api/v1/clients/' + encodeURIComponent(clientId) + '/usage?days=30');
+    renderUsage(usage);
+  }
+
+  async function refreshDashboard() {
+    if (!state.token || state.busy) return;
+    state.busy = true;
+    elements.refreshButton.disabled = true;
+    elements.refreshButton.textContent = 'Atualizando…';
+    try {
+      const results = await Promise.allSettled([
+        publicApi('/health'),
+        publicApi('/readyz'),
+        api('/api/v1/observability/performance?windowMinutes=5'),
+        api('/api/v1/observability/alerts?windowMinutes=5'),
+        api('/api/v1/observability/metrics?windowHours=24'),
+        api('/api/v1/clients')
+      ]);
+      const [health, readiness, performance, alerts, operations, clients] = results;
+      if (clients.status === 'rejected' && clients.reason?.status === 401) {
+        clearSession();
+        showToast('Credencial inválida ou expirada. Entre novamente.');
+        return;
+      }
+      if (health.status === 'fulfilled' || readiness.status === 'fulfilled') {
+        renderServices(
+          health.status === 'fulfilled' ? health.value : null,
+          readiness.status === 'fulfilled' ? readiness.value : null
+        );
+      }
+      if (performance.status === 'fulfilled') renderPerformance(performance.value);
+      else showToast('Não foi possível atualizar as métricas HTTP.');
+      if (alerts.status === 'fulfilled') renderAlerts(alerts.value);
+      if (operations.status === 'fulfilled') renderOperationalMetrics(operations.value);
+      try {
+        renderAlertHistory(await api('/api/v1/observability/alerts/history?limit=30'));
+      } catch {
+        showToast('Não foi possível consultar o histórico recente de alertas.');
+      }
+      if (clients.status === 'fulfilled') {
+        renderClients(clients.value);
+        if (state.selectedClientId) {
+          try { await loadUsage(state.selectedClientId); }
+          catch { showToast('Não foi possível carregar o consumo do cliente selecionado.'); }
+        }
+      }
+      text(elements.lastUpdated, 'Atualizado às ' + new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium' }).format(new Date()));
+      setConnection(true, 'Conectado');
+    } catch (error) {
+      showToast(error.message || 'Falha ao atualizar o painel.');
+    } finally {
+      state.busy = false;
+      elements.refreshButton.disabled = false;
+      elements.refreshButton.textContent = 'Atualizar';
+    }
+  }
+
+  elements.loginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const candidate = elements.adminToken.value.trim();
+    if (candidate.length < 32) {
+      text(elements.loginMessage, 'Informe uma credencial master válida.');
+      return;
+    }
+    elements.connectButton.disabled = true;
+    elements.connectButton.textContent = 'Validando…';
+    text(elements.loginMessage, '');
+    try {
+      const response = await fetch('/api/v1/clients', {
+        headers: { authorization: 'Bearer ' + candidate },
+        cache: 'no-store'
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || 'Credencial sem acesso administrativo.');
+      }
+      state.token = candidate;
+      elements.adminToken.value = '';
+      elements.loginPanel.classList.add('hidden');
+      elements.dashboard.classList.remove('hidden');
+      setConnection(true, 'Conectado');
+      await refreshDashboard();
+      if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+      state.refreshTimer = window.setInterval(refreshDashboard, 30_000);
+    } catch (error) {
+      text(elements.loginMessage, error.message || 'Não foi possível autenticar.');
+      elements.loginMessage.className = 'form-message';
+      state.token = '';
+    } finally {
+      elements.connectButton.disabled = false;
+      elements.connectButton.textContent = 'Entrar no painel';
+    }
+  });
+
+  elements.refreshButton.addEventListener('click', refreshDashboard);
+  elements.logoutButton.addEventListener('click', () => {
+    clearSession();
+    showToast('Sessão encerrada. A credencial foi removida da memória.');
+  });
+  elements.clientSelect.addEventListener('change', async (event) => {
+    state.selectedClientId = event.target.value;
+    if (!state.selectedClientId) return;
+    try { await loadUsage(state.selectedClientId); }
+    catch (error) { showToast(error.message || 'Falha ao carregar o consumo.'); }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    state.token = '';
+    if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+  });
+})();

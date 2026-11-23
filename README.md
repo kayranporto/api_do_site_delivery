@@ -4,7 +4,7 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 a 13 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas e integração de monitoramento centralizado.
+Etapas 1 a 14 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas, monitoramento centralizado e dashboard administrativo.
 
 O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, calibrar os limites de alerta por ambiente e integrar notificações externas/monitoramento centralizado.
 
@@ -50,6 +50,14 @@ Os endpoints de observabilidade exigem escopo global `observability:read`; chave
 
 As variáveis `OBSERVABILITY_WINDOW_MINUTES`, `ALERT_MIN_REQUESTS`, `ALERT_P95_LATENCY_MS`, `ALERT_ERROR_RATE_PERCENT`, `ALERT_429_RATE_PERCENT`, `ALERT_RSS_MB`, `ALERT_NOTIFICATION_INTERVAL_MS` e `ALERT_NOTIFICATION_COOLDOWN_MS` controlam janela, limites e cadência dos alertas. Em produção, configure também `METRICS_ACCESS_TOKEN` para scraping e, quando desejar notificações diretas, `ALERT_WEBHOOK_URL` (HTTPS) e opcionalmente `ALERT_WEBHOOK_TOKEN`.
 
+## Dashboard administrativo
+
+Acesse **/admin** no mesmo host da API para abrir o painel de monitoramento. Entre usando a credencial master `API_ACCESS_TOKEN`. A interface apresenta readiness, métricas HTTP, alertas atuais e histórico recente, consumo de clientes e resumo de execuções/eventos.
+
+O token é mantido somente na memória da página; ele não é salvo em `localStorage` nem `sessionStorage` e é apagado ao sair ou recarregar. A API valida cada chamada administrativa no servidor. O acesso de navegador deve usar HTTPS em produção e a credencial master nunca deve ser compartilhada ou embutida no frontend.
+
+O painel atualiza automaticamente a cada 30 segundos. O histórico de alertas é limitado a 100 eventos em memória na instância e não é persistente nem compartilhado entre réplicas. Consulte docs/admin-dashboard.md.
+
 ## Credenciais de cliente
 
 Use a credencial master para criar chaves individuais em **POST /api/v1/clients**. A chave bruta é exibida somente na criação e na rotação; o banco mantém apenas o hash. Por padrão, uma nova chave expira em 90 dias. Configure **expiresInDays**, **rateLimitMax** e **rateLimitWindowMs** no corpo da criação. Use **POST /api/v1/clients/:clientId/rotate** para trocar a chave (a anterior é invalidada imediatamente), **POST /api/v1/clients/:clientId/limits** para ajustar quotas, **POST /api/v1/clients/:clientId/revoke** para revogar, **GET /api/v1/clients/:clientId/audit** para consultar eventos e **GET /api/v1/clients/:clientId/usage** para consultar consumo diário. Consulte docs/authentication-authorization.md.
@@ -71,4 +79,4 @@ Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions ex
 - tests: testes Node.js e Jest.
 - docs: decisões das camadas, contrato HTTP, persistência e operação.
 
-Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md, docs/rate-limiting-usage.md, docs/monitoring-alerts.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.
+Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md, docs/rate-limiting-usage.md, docs/monitoring-alerts.md, docs/admin-dashboard.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.

@@ -1,4 +1,4 @@
-/** Avalia alertas periodicamente e deduplica notificações até a recuperação. */
+/** Avalia alertas periodicamente, mantém histórico recente e deduplica notificações. */
 export class AlertMonitor {
   constructor({
     httpMetrics,
@@ -7,6 +7,7 @@ export class AlertMonitor {
     windowMinutes = 5,
     intervalMs = 60_000,
     cooldownMs = 300_000,
+    historyLimit = 100,
     clock = Date.now,
     onError = () => {}
   } = {}) {
@@ -28,6 +29,9 @@ export class AlertMonitor {
     if (!Number.isInteger(cooldownMs) || cooldownMs < 10_000 || cooldownMs > 86_400_000) {
       throw new RangeError('cooldownMs deve estar entre 10000 e 86400000.');
     }
+    if (!Number.isInteger(historyLimit) || historyLimit < 10 || historyLimit > 1_000) {
+      throw new RangeError('historyLimit deve estar entre 10 e 1000.');
+    }
     if (typeof clock !== 'function' || typeof onError !== 'function') {
       throw new TypeError('clock e onError devem ser funções.');
     }
@@ -38,10 +42,13 @@ export class AlertMonitor {
     this.windowMinutes = windowMinutes;
     this.intervalMs = intervalMs;
     this.cooldownMs = cooldownMs;
+    this.historyLimit = historyLimit;
     this.clock = clock;
     this.onError = onError;
     this.activeAlerts = new Map();
+    this.observedAlerts = new Map();
     this.lastNotifiedAt = new Map();
+    this.history = [];
     this.timer = null;
     this.inFlight = null;
   }
@@ -56,6 +63,50 @@ export class AlertMonitor {
     }
   }
 
+  recordHistory({ status, alert, now, evaluation }) {
+    const entry = {
+      timestamp: new Date(now).toISOString(),
+      status,
+      code: alert.code,
+      severity: alert.severity,
+      observed: alert.observed,
+      threshold: alert.threshold,
+      message: alert.message,
+      instanceId: evaluation.instanceId,
+      windowMinutes: evaluation.windowMinutes
+    };
+    this.history.push(entry);
+    if (this.history.length > this.historyLimit) {
+      this.history.splice(0, this.history.length - this.historyLimit);
+    }
+  }
+
+  getHistory({ limit = 50 } = {}) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new RangeError('limit deve estar entre 1 e 100.');
+    }
+    return this.history.slice(-limit).reverse().map((entry) => ({ ...entry }));
+  }
+
+  observe(evaluation, now = this.clock()) {
+    if (!evaluation || !Array.isArray(evaluation.alerts) || !Number.isFinite(now)) {
+      throw new TypeError('Avaliação de alertas inválida.');
+    }
+    const current = new Map(evaluation.alerts.map((alert) => [alert.code, alert]));
+    for (const alert of current.values()) {
+      if (!this.observedAlerts.has(alert.code)) {
+        this.recordHistory({ status: 'firing', alert, now, evaluation });
+      }
+    }
+    for (const alert of this.observedAlerts.values()) {
+      if (!current.has(alert.code)) {
+        this.recordHistory({ status: 'resolved', alert, now, evaluation });
+      }
+    }
+    this.observedAlerts = current;
+    return evaluation;
+  }
+
   async performCheck() {
     const now = this.clock();
     const snapshot = this.httpMetrics.snapshot({
@@ -63,19 +114,24 @@ export class AlertMonitor {
       now
     });
     const evaluation = this.alertEvaluator.evaluate(snapshot);
-    if (!this.notifier) return evaluation;
+    this.observe(evaluation, now);
 
     const current = new Map(evaluation.alerts.map((alert) => [alert.code, alert]));
     const due = [];
     for (const alert of current.values()) {
       const lastNotified = this.lastNotifiedAt.get(alert.code);
-      if (lastNotified === undefined || now - lastNotified >= this.cooldownMs) due.push(alert);
+      if (lastNotified === undefined || now - lastNotified >= this.cooldownMs) {
+        due.push(alert);
+        if (lastNotified !== undefined) {
+          this.recordHistory({ status: 'reminder', alert, now, evaluation });
+        }
+      }
     }
     const resolved = [...this.activeAlerts.values()]
       .filter((alert) => !current.has(alert.code))
       .map((alert) => ({ code: alert.code, severity: alert.severity }));
 
-    if (due.length > 0 || resolved.length > 0) {
+    if (this.notifier && (due.length > 0 || resolved.length > 0)) {
       await this.notifier.notify({
         status: current.size > 0 ? 'firing' : 'resolved',
         generatedAt: evaluation.generatedAt,

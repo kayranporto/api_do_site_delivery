@@ -81,3 +81,10 @@ O endpoint do webhook é configurado pelo operador, nunca por usuários da API. 
 - Métricas e estado de deduplicação são locais ao processo; cada réplica produz sua própria série de métricas e suas próprias notificações. O scraping centralizado deve coletar todas as instâncias.
 - O buffer é volátil e não substitui histórico durável nem auditoria contábil.
 - O webhook não implementa persistência de fila, retry exponencial durável, dashboard ou formatos específicos para plataformas de chat.
+
+
+## Painel administrativo — Etapa 14
+
+O console web está disponível em `/admin`. Ele reúne liveness/readiness, desempenho HTTP, alertas atuais, histórico recente da instância, consumo por cliente e métricas de execuções/eventos. As chamadas administrativas usam a credencial master, validada pelo backend. A interface não persiste o token no armazenamento local/sessão do navegador.
+
+O histórico é obtido por `GET /api/v1/observability/alerts/history?limit=50` e limitado a 100 eventos em memória por instância; não é histórico durável. A rota é master-only.
