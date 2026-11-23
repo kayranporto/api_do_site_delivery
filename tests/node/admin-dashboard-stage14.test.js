@@ -83,3 +83,23 @@ test('dashboard client script possui sintaxe válida e o HTML carrega somente as
   assert.match(html, /<link rel="stylesheet" href="\/admin\/assets\/styles\.css">/);
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/);
 });
+
+
+test('dashboard inclui gestão de credenciais e mantém segredos fora do storage persistente', async () => {
+  const scriptUrl = new URL('../../public/admin/assets/app.js', import.meta.url);
+  const htmlUrl = new URL('../../public/admin/index.html', import.meta.url);
+  const script = await readFile(scriptUrl, 'utf8');
+  const html = await readFile(htmlUrl, 'utf8');
+  assert.doesNotThrow(() => new Script(script));
+  for (const id of [
+    'createClientForm', 'limitsForm', 'rotateForm', 'revokeClientButton',
+    'clientAudit', 'credentialReveal', 'copyCredentialButton'
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  assert.match(script, /\/api\/v1\/clients/);
+  assert.match(script, /\/rotate/);
+  assert.match(script, /\/limits/);
+  assert.match(script, /\/revoke/);
+  assert.match(script, /hideCredentialReveal/);
+  assert.match(script, /120_000/);
+  assert.doesNotMatch(script, /localStorage|sessionStorage/);
+});

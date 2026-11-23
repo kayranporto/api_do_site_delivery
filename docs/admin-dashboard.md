@@ -1,4 +1,4 @@
-# Etapa 14 — Dashboard administrativo
+# Etapa 15 — Dashboard administrativo e gestão de credenciais
 
 ## Acesso
 
@@ -16,6 +16,9 @@ Em produção, exponha o painel somente por HTTPS. Restrinja o acesso com VPN, a
 - **Histórico de alertas**: transições firing/resolved e lembretes recentes da instância.
 - **Consumo por cliente**: contagem diária dos últimos 30 dias, por meio do endpoint de usage.
 - **Resumo operacional**: execuções por estado e eventos por tipo/severidade.
+- **Criar credencial**: nome, escopos, integrações permitidas, expiração e quota.
+- **Gerenciar credencial**: atualizar limites, rotacionar chave ou revogar acesso.
+- **Auditoria**: eventos recentes da credencial selecionada.
 
 A página atualiza os dados a cada 30 segundos e possui atualização manual e logout.
 
@@ -33,4 +36,15 @@ O monitor mantém no máximo 100 eventos por processo. A lista é volátil, loca
 - Arquivos estáticos seguem a política CSP padrão do Helmet.
 - Em produção, use HTTPS e restrinja o caminho administrativo à rede/identidade dos operadores.
 - Métricas HTTP permanecem locais à instância, e a seleção de consumo depende da disponibilidade do Redis.
-- A interface não executa ações de criação, rotação ou revogação de credenciais; nesta etapa é somente leitura.
+- A interface executa ações administrativas somente após interação explícita do operador; os endpoints continuam exigindo a credencial master no servidor.
+
+
+## Gestão de credenciais (Etapa 15)
+
+A área **Criar credencial** envia POST /api/v1/clients. O operador escolhe os escopos, o conjunto de integrações, a validade (1–3650 dias), a quota (1–100000 requisições) e a janela (1000–3600000 ms). Lista vazia de integrações significa nenhuma integração; a opção de acesso global envia integrationIds = null. O escopo observability:read requer a opção global por definição do modelo de autorização.
+
+Para uma credencial selecionada, o painel permite atualizar quota por POST /api/v1/clients/:clientId/limits, rotacionar por POST /api/v1/clients/:clientId/rotate e revogar por POST /api/v1/clients/:clientId/revoke. Também consulta auditoria por GET /api/v1/clients/:clientId/audit.
+
+A criação e a rotação retornam o segredo bruto uma única vez. O painel o mantém somente na memória da página, não usa storage, cookies ou URL e oferece cópia explícita. O segredo é ocultado automaticamente após dois minutos, ao ocultar manualmente, ao sair e ao recarregar. A API não consegue recuperar uma chave já ocultada; nesse caso, o operador deve rotacioná-la novamente.
+
+Revogação e rotação pedem confirmação antes de executar. A rotação invalida imediatamente a chave anterior, portanto sistemas consumidores devem receber a nova chave de forma coordenada. A revogação é efetiva imediatamente. Todas as operações continuam protegidas por requireMaster no servidor; controles visuais não substituem autorização da API.

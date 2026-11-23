@@ -152,6 +152,81 @@
           </div>
         </article>
       </div>
+
+      <div class="management-grid">
+        <article class="panel">
+          <div class="panel-heading">
+            <div><h3>Criar credencial</h3><p class="muted">A chave será exibida apenas nesta resposta</p></div>
+          </div>
+          <form id="createClientForm" class="management-form">
+            <label class="field-label" for="newClientName">Nome do cliente</label>
+            <input id="newClientName" name="name" class="field-control" type="text" minlength="2" maxlength="120" required placeholder="Ex.: Aplicativo parceiro">
+
+            <span class="field-label">Permissões (escopos)</span>
+            <div class="scope-grid">
+              <label class="check-row"><input type="checkbox" data-scope value="integrations:read" checked><span>Consultar integrações</span></label>
+              <label class="check-row"><input type="checkbox" data-scope value="integrations:manage"><span>Gerenciar integrações</span></label>
+              <label class="check-row"><input type="checkbox" data-scope value="executions:read"><span>Consultar execuções</span></label>
+              <label class="check-row"><input type="checkbox" data-scope value="executions:write"><span>Executar operações</span></label>
+              <label class="check-row"><input type="checkbox" data-scope value="executions:reconcile"><span>Reconciliar execuções</span></label>
+              <label class="check-row"><input type="checkbox" data-scope value="observability:read"><span>Consultar métricas globais</span></label>
+            </div>
+
+            <label class="field-label" for="newClientIntegrationIds">IDs de integrações permitidas</label>
+            <textarea id="newClientIntegrationIds" class="field-control" name="integrationIds" rows="3" placeholder="Um ID por linha. Em branco = nenhuma integração."></textarea>
+            <label class="check-row global-access">
+              <input id="newClientGlobalAccess" name="globalAccess" type="checkbox">
+              <span>Acesso a todas as integrações (global)</span>
+            </label>
+            <p class="field-help">O escopo de métricas globais exige acesso global. Conceda acesso global apenas a clientes confiáveis.</p>
+
+            <div class="field-grid">
+              <div><label class="field-label" for="newClientExpires">Validade (dias)</label><input id="newClientExpires" name="expiresInDays" class="field-control" type="number" min="1" max="3650" value="90" required></div>
+              <div><label class="field-label" for="newClientRate">Requisições por janela</label><input id="newClientRate" name="rateLimitMax" class="field-control" type="number" min="1" max="100000" value="120" required></div>
+              <div><label class="field-label" for="newClientWindow">Janela (ms)</label><input id="newClientWindow" name="rateLimitWindowMs" class="field-control" type="number" min="1000" max="3600000" step="1000" value="60000" required></div>
+            </div>
+            <button class="button button-primary" type="submit">Criar credencial</button>
+            <p id="createClientMessage" class="form-message" role="status" aria-live="polite"></p>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <div><h3>Gerenciar credencial</h3><p class="muted">Ações sobre a credencial selecionada no painel de consumo</p></div>
+          </div>
+          <p id="selectedClientSummary" class="selected-client-summary">Selecione uma credencial para habilitar as ações.</p>
+          <form id="limitsForm" class="management-form">
+            <span class="field-label">Atualizar limites</span>
+            <div class="field-grid two-columns">
+              <div><label class="field-label" for="editClientRate">Requisições</label><input id="editClientRate" name="rateLimitMax" class="field-control" type="number" min="1" max="100000" required></div>
+              <div><label class="field-label" for="editClientWindow">Janela (ms)</label><input id="editClientWindow" name="rateLimitWindowMs" class="field-control" type="number" min="1000" max="3600000" step="1000" required></div>
+            </div>
+            <button id="saveLimitsButton" class="button button-secondary" type="submit" disabled>Salvar limites</button>
+          </form>
+          <form id="rotateForm" class="management-form compact-form">
+            <label class="field-label" for="rotateExpiresInDays">Nova validade após rotação (dias)</label>
+            <input id="rotateExpiresInDays" name="expiresInDays" class="field-control" type="number" min="1" max="3650" value="90" required>
+            <button id="rotateClientButton" class="button button-secondary" type="submit" disabled>Rotacionar chave</button>
+          </form>
+          <button id="revokeClientButton" class="button button-danger" type="button" disabled>Revogar credencial</button>
+          <p id="manageClientMessage" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="panel audit-panel">
+          <div class="panel-heading"><div><h3>Auditoria da credencial</h3><p class="muted">Criação, autenticação, rotação, limites e revogação</p></div></div>
+          <div id="clientAudit" class="audit-list empty-state">Selecione uma credencial para consultar a auditoria.</div>
+        </article>
+      </div>
+
+      <section id="credentialReveal" class="credential-reveal hidden" aria-live="polite" aria-labelledby="credentialRevealTitle">
+        <div class="credential-reveal-heading">
+          <div><p class="eyebrow">SEGREDO EXIBIDO UMA ÚNICA VEZ</p><h3 id="credentialRevealTitle">Nova credencial</h3></div>
+          <button id="hideCredentialButton" class="button button-quiet" type="button">Ocultar</button>
+        </div>
+        <p class="field-help">Copie e guarde a chave em um cofre seguro agora. Ela não será mostrada novamente; ao ocultar, sair ou recarregar, o painel a apaga da memória da página.</p>
+        <code id="credentialValue" class="credential-value"></code>
+        <div class="form-actions"><button id="copyCredentialButton" class="button button-secondary" type="button">Copiar chave</button></div>
+      </section>
     </section>
 
     <section class="section-block">

@@ -7,6 +7,8 @@
     clients: [],
     selectedClientId: '',
     refreshTimer: null,
+    credentialTimer: null,
+    oneTimeCredential: '',
     busy: false
   };
 
@@ -72,15 +74,17 @@
     showToast.timer = window.setTimeout(() => elements.toast.classList.remove('visible'), 3200);
   }
 
-  async function api(path, options = {}) {
+  async function apiEnvelope(path, options = {}) {
     if (!state.token) throw new Error('Sessão administrativa encerrada.');
     const response = await fetch(path, {
       method: options.method ?? 'GET',
       cache: 'no-store',
       headers: {
         authorization: 'Bearer ' + state.token,
+        ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
         ...(options.headers ?? {})
       },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal
     });
     const payload = await response.json().catch(() => ({}));
@@ -90,7 +94,95 @@
       error.status = response.status;
       throw error;
     }
+    return payload;
+  }
+
+  async function api(path, options = {}) {
+    const payload = await apiEnvelope(path, options);
     return payload?.data ?? payload;
+  }
+
+  function hideCredentialReveal() {
+    if (state.credentialTimer) window.clearTimeout(state.credentialTimer);
+    state.credentialTimer = null;
+    state.oneTimeCredential = '';
+    const reveal = $('credentialReveal');
+    const value = $('credentialValue');
+    if (value) value.textContent = '';
+    if (reveal) reveal.classList.add('hidden');
+  }
+
+  function revealCredential(credential, title) {
+    hideCredentialReveal();
+    if (!credential) return;
+    state.oneTimeCredential = credential;
+    text($('credentialRevealTitle'), title);
+    text($('credentialValue'), credential);
+    $('credentialReveal').classList.remove('hidden');
+    $('credentialReveal').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    state.credentialTimer = window.setTimeout(() => {
+      hideCredentialReveal();
+      showToast('A chave foi ocultada automaticamente. Guarde-a em local seguro antes de fechar o painel.');
+    }, 120_000);
+  }
+
+  function syncClientManagementFields() {
+    const client = state.clients.find((item) => item.id === state.selectedClientId);
+    if (!client) return;
+    $('editClientRate').value = String(client.rateLimitMax);
+    $('editClientWindow').value = String(client.rateLimitWindowMs);
+  }
+
+  function renderClientManagement({ syncFields = false } = {}) {
+    const client = state.clients.find((item) => item.id === state.selectedClientId);
+    const status = client ? clientStatus(client) : null;
+    text($('selectedClientSummary'), client
+      ? client.name + ' · ' + client.keyPrefix + ' · ' + status.label
+      : 'Selecione uma credencial para habilitar as ações.');
+    // Chaves expiradas ainda podem ser rotacionadas; somente credenciais revogadas ficam bloqueadas.
+    const active = Boolean(client && !client.revokedAt);
+    $('saveLimitsButton').disabled = !active;
+    $('rotateClientButton').disabled = !active;
+    $('revokeClientButton').disabled = !active;
+    if (syncFields && client) syncClientManagementFields();
+  }
+
+  function renderClientAudit(events) {
+    const root = $('clientAudit');
+    root.replaceChildren();
+    if (!events?.length) {
+      root.appendChild(node('p', 'empty-state', 'Nenhum evento de auditoria registrado para esta credencial.'));
+      return;
+    }
+    const labels = {
+      created: 'Credencial criada',
+      authenticated: 'Autenticação válida',
+      rotated: 'Chave rotacionada',
+      limits_updated: 'Limites atualizados',
+      revoked: 'Credencial revogada'
+    };
+    for (const event of events) {
+      const item = node('article', 'audit-item');
+      add(item, node('span', 'audit-action', labels[event.action] || event.action));
+      add(item, node('span', 'audit-date', formatDateTime(event.createdAt) + (event.requestId ? ' · ' + event.requestId : '')));
+      add(root, item);
+    }
+  }
+
+  async function loadClientAudit() {
+    const clientId = state.selectedClientId;
+    if (!clientId || !state.token) {
+      renderClientAudit([]);
+      return;
+    }
+    try {
+      const events = await api('/api/v1/clients/' + encodeURIComponent(clientId) + '/audit?limit=30');
+      if (state.selectedClientId === clientId) renderClientAudit(events);
+    } catch (error) {
+      if (state.selectedClientId !== clientId) return;
+      const root = $('clientAudit');
+      root.replaceChildren(node('p', 'empty-state', error.message || 'Não foi possível consultar a auditoria.'));
+    }
   }
 
   async function publicApi(path) {
@@ -105,6 +197,7 @@
   }
 
   function clearSession() {
+    hideCredentialReveal();
     state.token = '';
     state.clients = [];
     state.selectedClientId = '';
@@ -289,11 +382,14 @@
       text($('usageTotal'), '—');
       text($('usageCaption'), 'Nenhuma credencial disponível');
       $('usageChart').replaceChildren(node('p', 'empty-state', 'Crie uma credencial para acompanhar o consumo.'));
+      renderClientManagement();
+      renderClientAudit([]);
       return;
     }
     const hasPrevious = state.clients.some((client) => client.id === previous);
     state.selectedClientId = hasPrevious ? previous : state.clients[0].id;
     select.value = state.selectedClientId;
+    renderClientManagement({ syncFields: state.selectedClientId !== previous });
   }
 
   function renderUsage(usage) {
@@ -399,8 +495,9 @@
       if (clients.status === 'fulfilled') {
         renderClients(clients.value);
         if (state.selectedClientId) {
-          try { await loadUsage(state.selectedClientId); }
-          catch { showToast('Não foi possível carregar o consumo do cliente selecionado.'); }
+          try {
+            await Promise.all([loadUsage(state.selectedClientId), loadClientAudit()]);
+          } catch { showToast('Não foi possível carregar os detalhes da credencial selecionada.'); }
         }
       }
       text(elements.lastUpdated, 'Atualizado às ' + new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium' }).format(new Date()));
@@ -458,12 +555,142 @@
   });
   elements.clientSelect.addEventListener('change', async (event) => {
     state.selectedClientId = event.target.value;
+    renderClientManagement({ syncFields: true });
+    if (!state.selectedClientId) {
+      renderClientAudit([]);
+      return;
+    }
+    try {
+      await Promise.all([loadUsage(state.selectedClientId), loadClientAudit()]);
+    } catch (error) { showToast(error.message || 'Falha ao carregar os detalhes da credencial.'); }
+  });
+
+  $('createClientForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const message = $('createClientMessage');
+    const scopes = [...form.querySelectorAll('[data-scope]:checked')].map((input) => input.value);
+    const globalAccess = $('newClientGlobalAccess').checked;
+    const integrationIds = $('newClientIntegrationIds').value
+      .split(/[\s,]+/).map((value) => value.trim()).filter(Boolean);
+    const uniqueIntegrationIds = [...new Set(integrationIds)];
+    if (!scopes.length) {
+      text(message, 'Selecione ao menos uma permissão.');
+      return;
+    }
+    if (scopes.includes('observability:read') && !globalAccess) {
+      text(message, 'O escopo de métricas exige marcar acesso global a todas as integrações.');
+      return;
+    }
+    const body = {
+      name: form.elements.name.value.trim(),
+      scopes,
+      integrationIds: globalAccess ? null : uniqueIntegrationIds,
+      expiresInDays: Number(form.elements.expiresInDays.value),
+      rateLimitMax: Number(form.elements.rateLimitMax.value),
+      rateLimitWindowMs: Number(form.elements.rateLimitWindowMs.value)
+    };
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    text(message, 'Criando credencial…');
+    try {
+      const result = await apiEnvelope('/api/v1/clients', { method: 'POST', body });
+      if (result.data?.id) state.selectedClientId = result.data.id;
+      revealCredential(result.credential, 'Credencial criada');
+      text(message, 'Credencial criada. Copie a chave antes de ocultá-la.');
+      showToast('Credencial criada com sucesso.');
+      await refreshDashboard();
+    } catch (error) {
+      text(message, error.message || 'Não foi possível criar a credencial.');
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  $('limitsForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
     if (!state.selectedClientId) return;
-    try { await loadUsage(state.selectedClientId); }
-    catch (error) { showToast(error.message || 'Falha ao carregar o consumo.'); }
+    const form = event.currentTarget;
+    $('saveLimitsButton').disabled = true;
+    try {
+      await api('/api/v1/clients/' + encodeURIComponent(state.selectedClientId) + '/limits', {
+        method: 'POST',
+        body: {
+          rateLimitMax: Number(form.elements.rateLimitMax.value),
+          rateLimitWindowMs: Number(form.elements.rateLimitWindowMs.value)
+        }
+      });
+      text($('manageClientMessage'), 'Limites atualizados.');
+      showToast('Limites da credencial atualizados.');
+      await refreshDashboard();
+    } catch (error) {
+      text($('manageClientMessage'), error.message || 'Não foi possível atualizar os limites.');
+    } finally {
+      renderClientManagement();
+    }
+  });
+
+  $('rotateForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.selectedClientId) return;
+    const expiresInDays = Number(event.currentTarget.elements.expiresInDays.value);
+    const selected = state.clients.find((client) => client.id === state.selectedClientId);
+    if (!window.confirm('Rotacionar a chave de ' + (selected?.name || 'esta credencial') + '? A chave anterior será invalidada imediatamente e não poderá ser recuperada.')) return;
+    $('rotateClientButton').disabled = true;
+    try {
+      const result = await apiEnvelope('/api/v1/clients/' + encodeURIComponent(state.selectedClientId) + '/rotate', {
+        method: 'POST',
+        body: { expiresInDays }
+      });
+      revealCredential(result.credential, 'Nova chave após rotação');
+      text($('manageClientMessage'), 'Chave rotacionada. A chave anterior foi invalidada imediatamente.');
+      showToast('Chave rotacionada. Guarde o novo segredo agora.');
+      await refreshDashboard();
+    } catch (error) {
+      text($('manageClientMessage'), error.message || 'Não foi possível rotacionar a chave.');
+    } finally {
+      renderClientManagement();
+    }
+  });
+
+  $('revokeClientButton').addEventListener('click', async () => {
+    if (!state.selectedClientId) return;
+    const selected = state.clients.find((client) => client.id === state.selectedClientId);
+    if (!window.confirm('Revogar permanentemente o acesso de ' + (selected?.name || 'esta credencial') + '? A ação não pode ser desfeita.')) return;
+    $('revokeClientButton').disabled = true;
+    try {
+      await api('/api/v1/clients/' + encodeURIComponent(state.selectedClientId) + '/revoke', { method: 'POST' });
+      hideCredentialReveal();
+      text($('manageClientMessage'), 'Credencial revogada. O acesso foi bloqueado.');
+      showToast('Credencial revogada.');
+      await refreshDashboard();
+    } catch (error) {
+      text($('manageClientMessage'), error.message || 'Não foi possível revogar a credencial.');
+    } finally {
+      renderClientManagement();
+    }
+  });
+
+  $('hideCredentialButton').addEventListener('click', hideCredentialReveal);
+  $('copyCredentialButton').addEventListener('click', async () => {
+    if (!state.oneTimeCredential) return;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('A cópia automática não está disponível neste navegador.');
+      await navigator.clipboard.writeText(state.oneTimeCredential);
+      showToast('Chave copiada. Guarde-a em um cofre seguro.');
+    } catch (error) {
+      showToast(error.message || 'Não foi possível copiar. Selecione a chave e copie manualmente.');
+    }
+  });
+
+  $('newClientGlobalAccess').addEventListener('change', (event) => {
+    const textarea = $('newClientIntegrationIds');
+    textarea.disabled = event.target.checked;
+    if (event.target.checked) textarea.value = '';
   });
 
   window.addEventListener('beforeunload', () => {
+    hideCredentialReveal();
     state.token = '';
     if (state.refreshTimer) window.clearInterval(state.refreshTimer);
   });

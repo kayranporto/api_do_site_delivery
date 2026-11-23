@@ -166,3 +166,44 @@ td:first-child { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Etapa 15 — gestão administrativa de credenciais */
+.management-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.management-form { display: grid; gap: 10px; margin-top: 12px; }
+.management-form + .management-form { border-top: 1px solid var(--border); padding-top: 15px; }
+.field-label { display: block; color: #aab9cd; font-size: 10px; font-weight: 750; }
+.field-control { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 9px; padding: 10px 11px; color: #edf3fc; background: #101b2d; font: inherit; font-size: 11px; }
+.field-control:focus { outline: 2px solid rgba(119,155,255,.45); outline-offset: 1px; }
+.field-control:disabled { opacity: .55; cursor: not-allowed; }
+textarea.field-control { resize: vertical; line-height: 1.5; }
+.field-help { color: #8293ab; font-size: 9px; line-height: 1.5; margin: 0; }
+.scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.check-row { display: flex; align-items: flex-start; gap: 8px; color: #bdc9d9; font-size: 10px; line-height: 1.4; cursor: pointer; }
+.check-row input { accent-color: #7d9bef; margin: 1px 0 0; }
+.global-access { border-top: 1px solid var(--border); padding-top: 10px; font-weight: 750; }
+.field-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; }
+.field-grid > div { display: grid; gap: 6px; }
+.field-grid.two-columns { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.selected-client-summary { color: #e7effb; font-size: 11px; font-weight: 750; padding: 10px 11px; border-radius: 9px; background: var(--surface-soft); }
+.button-secondary { color: #d9e5f7; border: 1px solid rgba(145,170,205,.2); background: rgba(119,155,255,.1); }
+.button-danger { color: #ffacb4; border: 1px solid rgba(255,124,137,.25); background: rgba(255,124,137,.09); }
+.button:disabled { opacity: .45; cursor: not-allowed; }
+.audit-panel { grid-column: 1 / -1; }
+.audit-list { display: grid; gap: 7px; max-height: 280px; overflow: auto; }
+.audit-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); }
+.audit-action { color: #dce7f7; font-size: 10px; font-weight: 700; }
+.audit-date { color: #8293ab; font-size: 9px; text-align: right; }
+.credential-reveal { margin-top: 14px; padding: 16px; border: 1px solid rgba(242,196,109,.35); border-radius: 13px; background: rgba(242,196,109,.06); }
+.credential-reveal-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 9px; }
+.credential-reveal h3 { color: #f2d59d; font-size: 14px; margin: 0; }
+.credential-value { display: block; overflow-wrap: anywhere; user-select: all; margin: 12px 0; padding: 13px; border-radius: 8px; color: #f7e8c8; background: rgba(0,0,0,.25); font-size: 11px; line-height: 1.5; }
+.form-actions { display: flex; gap: 8px; }
+@media (max-width: 900px) {
+  .management-grid { grid-template-columns: 1fr; }
+  .audit-panel { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .field-grid, .scope-grid, .field-grid.two-columns { grid-template-columns: 1fr; }
+  .audit-item { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .audit-date { text-align: left; }
+}

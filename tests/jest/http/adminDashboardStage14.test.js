@@ -67,6 +67,20 @@ describe('administrative dashboard', () => {
     expect(invalid.body.error.code).toBe('INVALID_ALERT_HISTORY_LIMIT');
   });
 
+  test('dashboard exposes credential management UI while management APIs remain master-only', async () => {
+    const { app } = setup();
+    const page = await request(app).get('/admin').expect(200);
+    expect(page.text).toContain('createClientForm');
+    expect(page.text).toContain('limitsForm');
+    expect(page.text).toContain('rotateForm');
+    expect(page.text).toContain('credentialReveal');
+
+    await request(app).post('/api/v1/clients').send({
+      name: 'No master access',
+      scopes: ['integrations:read']
+    }).expect(401);
+  });
+
   test('individual API credentials cannot read administrative alert history', async () => {
     const { app, container } = setup();
     const created = await master(request(app).post('/api/v1/clients')).send({
