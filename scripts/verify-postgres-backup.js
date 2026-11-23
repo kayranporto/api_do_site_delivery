@@ -76,21 +76,50 @@ async function verifyBackupRestore() {
     temporaryDirectory = await mkdtemp(join(tmpdir(), 'stage18-postgres-backup-'));
     const archivePath = join(temporaryDirectory, 'homologation.dump');
 
-    await execFileAsync('pg_dump', [
+    const dockerEnvironment = {
+      ...process.env,
+      PGPASSWORD: decodeURIComponent(sourceUrl.password)
+    };
+    const dockerOptions = {
+      timeout: 120_000,
+      maxBuffer: 1024 * 1024,
+      env: dockerEnvironment
+    };
+    const dockerPrefix = [
+      'run', '--rm', '--network', 'host',
+      '--env', 'PGPASSWORD',
+      '--volume', temporaryDirectory + ':/backup',
+      'postgres:16-alpine'
+    ];
+    const connectionArgs = [
+      '--host', sourceUrl.hostname.replace(/^\[|\]$/g, ''),
+      '--port', sourceUrl.port || '5432',
+      '--username', decodeURIComponent(sourceUrl.username)
+    ];
+
+    // Use the same PostgreSQL major as the ephemeral server. Newer pg_restore clients
+    // can emit settings that an older server does not recognize.
+    await execFileAsync('docker', [
+      ...dockerPrefix,
+      'pg_dump',
       '--format=custom',
       '--no-owner',
       '--no-acl',
-      '--file', archivePath,
-      sourceUrl.toString()
-    ], { timeout: 120_000, maxBuffer: 1024 * 1024 });
+      ...connectionArgs,
+      '--dbname', decodeURIComponent(sourceUrl.pathname.replace(/^\//, '')),
+      '--file', '/backup/homologation.dump'
+    ], dockerOptions);
 
-    await execFileAsync('pg_restore', [
+    await execFileAsync('docker', [
+      ...dockerPrefix,
+      'pg_restore',
       '--exit-on-error',
       '--no-owner',
       '--no-acl',
-      '--dbname', restoreUrl.toString(),
-      archivePath
-    ], { timeout: 120_000, maxBuffer: 1024 * 1024 });
+      ...connectionArgs,
+      '--dbname', RESTORE_DATABASE,
+      '/backup/homologation.dump'
+    ], dockerOptions);
 
     sourcePool = new Pool({ connectionString: sourceUrl.toString(), max: 1, connectionTimeoutMillis: 5_000 });
     restorePool = new Pool({ connectionString: restoreUrl.toString(), max: 1, connectionTimeoutMillis: 5_000 });

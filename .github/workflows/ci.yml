@@ -87,7 +87,7 @@ jobs:
         run: |
           npm ci
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y redis-tools postgresql-client
+          sudo apt-get install --no-install-recommends -y redis-tools
       - name: Run isolated service homologation
         run: npm run test:integration
       - name: Verify PostgreSQL backup and restore

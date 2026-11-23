@@ -14,12 +14,12 @@ Referências: [GHSA-3g3m-2fjr-6pw4](https://github.com/isaacs/node-glob/security
 O CI executa `npm run verify:backup` depois da homologação PostgreSQL/Redis. O comando:
 
 1. aceita apenas host local, database `stage17_homologation` e `STAGING_ALLOW_DB_RESET=true`;
-2. gera um arquivo temporário PostgreSQL custom-format via `pg_dump`;
+2. gera um arquivo temporário PostgreSQL custom-format via `pg_dump` executado na imagem `postgres:16-alpine`, alinhando a versão cliente ao servidor de homologação;
 3. restaura em uma base separada `stage18_restore_verification`;
 4. compara contagens e fingerprints MD5 de seis tabelas, incluindo migrations, integrações, execuções, eventos e credenciais/auditoria;
 5. remove a base de restauração e o arquivo temporário mesmo se houver falha.
 
-O script recusa sobrescrever uma base de restauração já existente. Ele não aceita URLs remotas e não é um fluxo de backup para produção. O arquivo temporário pode conter todos os dados da base de homologação e é apagado ao final do processo.
+O script usa Docker para executar `pg_dump`/`pg_restore` com cliente PostgreSQL 16, recusa sobrescrever uma base de restauração já existente e não aceita URLs remotas. Ele não é um fluxo de backup para produção; o runner precisa ter Docker disponível. O arquivo temporário pode conter todos os dados da base de homologação e é apagado ao final do processo.
 
 ## Procedimento recomendado para backups de produção
 
