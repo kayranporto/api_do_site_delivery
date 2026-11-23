@@ -81,5 +81,5 @@ test('dashboard client script possui sintaxe válida e o HTML carrega somente as
   assert.doesNotThrow(() => new Script(script));
   assert.match(html, /<script defer src="\/admin\/assets\/app\.js"><\/script>/);
   assert.match(html, /<link rel="stylesheet" href="\/admin\/assets\/styles\.css">/);
-  assert.doesNotMatch(html, /<script[^>]*>[\s\S]*?<\/script>/);
+  assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/);
 });
