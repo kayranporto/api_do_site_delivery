@@ -103,7 +103,7 @@ test('RotateApiClient troca a chave, renova validade e registra auditoria', asyn
   }).execute({ clientId: 'missing' }), null);
 });
 
-test('rate limiter suporta janelas e limites independentes por cliente', () => {
+test('rate limiter suporta janelas e limites independentes por cliente', async () => {
   const clock = makeClock();
   const limiter = createRateLimiter({
     clock: () => clock.now().getTime(),
@@ -117,21 +117,20 @@ test('rate limiter suporta janelas e limites independentes por cliente', () => {
     status(code) { this.statusCode = code; return this; },
     json(value) { this.body = value; return this; }
   });
-  const send = (clientId, max) => {
+  const send = async (clientId, max) => {
     const res = response();
     let nextCalls = 0;
-    limiter({ auth: { clientId, rateLimitMax: max, rateLimitWindowMs: 10_000 } }, res, () => { nextCalls += 1; });
+    await limiter({ auth: { clientId, rateLimitMax: max, rateLimitWindowMs: 10_000 } }, res, () => { nextCalls += 1; });
     return { res, nextCalls };
   };
-  assert.equal(send('A', 2).res.statusCode, 200);
-  assert.equal(send('A', 2).res.statusCode, 200);
-  assert.equal(send('A', 2).res.statusCode, 429);
-  assert.equal(send('B', 1).res.statusCode, 200);
-  assert.equal(send('B', 1).res.statusCode, 429);
+  assert.equal((await send('A', 2)).res.statusCode, 200);
+  assert.equal((await send('A', 2)).res.statusCode, 200);
+  assert.equal((await send('A', 2)).res.statusCode, 429);
+  assert.equal((await send('B', 1)).res.statusCode, 200);
+  assert.equal((await send('B', 1)).res.statusCode, 429);
   clock.advance(10_001);
-  assert.equal(send('A', 2).res.statusCode, 200);
+  assert.equal((await send('A', 2)).res.statusCode, 200);
 });
-
 test('UpdateApiClientLimits altera quota, preserva valores omitidos e audita a mudança', async () => {
   const repository = new InMemoryApiClientRepository();
   const clock = makeClock();
