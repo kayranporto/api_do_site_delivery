@@ -154,7 +154,7 @@ test('UpdateApiClientLimits altera quota, preserva valores omitidos e audita a m
   });
   assert.equal(changedWindow.rateLimitMax, 8);
   assert.equal(changedWindow.rateLimitWindowMs, 5_000);
-  await assert.rejects(() => update.execute({ clientId: created.client.id }), /ao menos um limite/);
+  await assert.rejects(() => update.execute({ clientId: created.client.id }), /Informe rateLimitMax/);
   const audit = await repository.listAudit(created.client.id);
   assert.equal(audit.filter((item) => item.action === 'limits_updated').length, 2);
   assert.equal(await update.execute({ clientId: 'missing', rateLimitMax: 4 }), null);

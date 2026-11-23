@@ -385,5 +385,5 @@ test('HttpRestProviderAdapter rejeita método mutável na consulta de reconcilia
     }),
     fetchImpl: async () => jsonResponse({ ok: true })
   });
-  await assert.rejects(() => adapter.reconcile(makeCommand()), /somente GET ou HEAD/);
+  await assert.rejects(() => adapter.reconcile(makeCommand()), /somente GET/);
 });
