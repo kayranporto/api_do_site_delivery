@@ -595,7 +595,11 @@
     text(message, 'Criando credencial…');
     try {
       const result = await apiEnvelope('/api/v1/clients', { method: 'POST', body });
-      if (result.data?.id) state.selectedClientId = result.data.id;
+      if (result.data?.id) {
+        state.selectedClientId = result.data.id;
+        $('editClientRate').value = String(result.data.rateLimitMax);
+        $('editClientWindow').value = String(result.data.rateLimitWindowMs);
+      }
       revealCredential(result.credential, 'Credencial criada');
       text(message, 'Credencial criada. Copie a chave antes de ocultá-la.');
       showToast('Credencial criada com sucesso.');
