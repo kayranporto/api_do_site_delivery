@@ -4,6 +4,7 @@ import { BusinessRuleError } from '../../../../src/domain/errors/BusinessRuleErr
 import { InvalidStateTransitionError } from '../../../../src/domain/errors/InvalidStateTransitionError.js';
 import { RetryPolicy } from '../../../../src/domain/value-objects/RetryPolicy.js';
 import { ValidationError } from '../../../../src/domain/errors/ValidationError.js';
+import vm from 'node:vm';
 
 const createdAt = new Date('2026-02-01T12:00:00.000Z');
 
@@ -91,6 +92,13 @@ describe('Execution', () => {
     execution.cancel(new Date('2026-02-01T12:00:01.000Z'));
     expect(execution.status).toBe(ExecutionStatus.CANCELLED);
     expect(execution.isFinal).toBe(true);
+  });
+
+  test('aceita objetos simples criados em outro contexto JavaScript e rejeita instâncias de classe', () => {
+    const crossRealmInput = vm.runInNewContext('({ customer: { email: "person@example.test" } })');
+    const execution = makeExecution({ input: crossRealmInput });
+    expect(execution.input.customer.email).toBe('person@example.test');
+    expect(() => makeExecution({ input: { createdAt: new Date() } })).toThrow(ValidationError);
   });
 
   test('rejeita input que não seja JSON estruturado', () => {

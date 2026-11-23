@@ -18,12 +18,7 @@ export const createIntegrationSchema = z.object({
 
 export const executeOperationSchema = z.object({
   operationName: z.string().trim().min(1).max(100),
-  payload: z.unknown().optional().transform((value) => {
-    if (value === undefined) return null;
-    const serialized = JSON.stringify(value);
-    if (serialized === undefined) throw new Error('payload deve ser serializável como JSON.');
-    return JSON.parse(serialized);
-  }),
+  payload: z.unknown().optional(),
   idempotencyKey: z.string().trim().min(8).max(128).optional()
 }).strict();
 

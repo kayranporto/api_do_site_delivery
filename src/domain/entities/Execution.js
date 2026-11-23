@@ -39,7 +39,13 @@ function assertJsonValue(value, seen = new WeakSet()) {
     for (const item of value) assertJsonValue(item, seen);
   } else {
     const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
+    const isPlainObject = prototype === null || (
+      Object.getPrototypeOf(prototype) === null
+      && Object.prototype.hasOwnProperty.call(prototype, 'constructor')
+      && typeof prototype.constructor === 'function'
+      && prototype.constructor.name === 'Object'
+    );
+    if (!isPlainObject) {
       throw new Error('Somente objetos simples são permitidos.');
     }
     for (const item of Object.values(value)) assertJsonValue(item, seen);
