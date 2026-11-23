@@ -57,3 +57,14 @@ O dashboard consome dados dos endpoints protegidos de clientes, consumo, métric
 A rota `GET /api/v1/observability/alerts/history?limit=50` é exclusiva da master; aceita 1 a 100 entradas e devolve `meta.retention=process_memory`. O histórico contém transições firing/resolved e lembretes do monitor, tem capacidade máxima de 100 eventos por instância e é apagado quando o processo reinicia. Não substitui um registro persistente ou compartilhado.
 
 Em produção, exponha o painel somente sobre HTTPS e, preferencialmente, restrinja `/admin` e as rotas administrativas por VPN, allowlist de IP ou proxy de identidade. A credencial master concede acesso global à API; utilize-a somente em estação administrativa confiável, não a distribua a clientes e faça logout ao encerrar a sessão.
+
+
+## Segurança e prontidão — Etapa 16
+
+A inicialização aceita apenas `NODE_ENV=development`, `test` ou `production`. Segredos de exemplo, valores com espaços e segredos reutilizados entre API master, Redis, métricas e webhook são recusados. Em produção, origens CORS configuradas devem usar HTTPS. URLs de webhook não aceitam query string: coloque qualquer segredo no header Authorization.
+
+Todas as respostas de `/api/v1`, incluindo falhas de autenticação, recebem `Cache-Control: no-store`. O Express declara `trust proxy=false`; não confie em `X-Forwarded-For` enviado diretamente por clientes. Antes de habilitar a aplicação atrás de proxy, defina uma lista explícita de proxies confiáveis e teste os endereços vistos pelo rate limiter.
+
+O workflow executa em Node.js 22, 24 e 26, faz `npm audit --audit-level=high`, verifica as fronteiras arquiteturais e roda os testes. As actions do workflow usam versões com runtime Node 24, e o checkout não persiste a credencial Git. Dependabot acompanha semanalmente dependências npm e actions.
+
+Consulte `docs/security-review.md` para o checklist de implantação e limitações que ainda dependem da infraestrutura real.

@@ -4,13 +4,13 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 a 14 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas, monitoramento centralizado e dashboard administrativo.
+Etapas 1 a 16 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas, monitoramento centralizado e dashboard administrativo.
 
 O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, calibrar os limites de alerta por ambiente e integrar notificações externas/monitoramento centralizado.
 
 ## Instalação e execução
 
-Requer Node.js 20 ou superior. Execute **npm ci**, copie **.env.example** para **.env**, configure um API_ACCESS_TOKEN aleatório com pelo menos 32 caracteres e inicie com **npm start**.
+Requer Node.js 22 ou superior. O CI valida as linhas LTS 22, 24 e 26. Execute **npm ci**, copie **.env.example** para **.env**, configure um API_ACCESS_TOKEN aleatório com pelo menos 32 caracteres e inicie com **npm start**.
 
 Sem DATABASE_URL, o modo local usa repositórios em memória e perde os dados ao reiniciar. O rate limit local também usa memória e não coordena processos diferentes.
 
@@ -80,3 +80,10 @@ Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions ex
 - docs: decisões das camadas, contrato HTTP, persistência e operação.
 
 Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md, docs/rate-limiting-usage.md, docs/monitoring-alerts.md, docs/admin-dashboard.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.
+
+
+## Segurança e prontidão para produção — Etapa 16
+
+A configuração rejeita valores de `NODE_ENV` desconhecidos, segredos de exemplo, tokens com espaços e reutilização do mesmo segredo entre API master, Redis, métricas e webhook. Origens CORS em produção devem ser HTTPS. URLs de webhook não aceitam credenciais, query string ou fragmento.
+
+As respostas de `/api/v1` usam `Cache-Control: no-store`, e o Express não confia em cabeçalhos de proxy por padrão. O CI executa testes nas linhas LTS 22, 24 e 26, auditoria de dependências com `npm audit` e verificação das fronteiras arquiteturais. O Dependabot acompanha atualizações de npm e GitHub Actions. Consulte `docs/security-review.md` antes de qualquer implantação.

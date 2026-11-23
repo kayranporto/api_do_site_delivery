@@ -11,18 +11,29 @@ permissions:
 
 jobs:
   test:
-    name: Node.js tests
+    name: Node.js ${{ matrix.node-version }} — tests and security audit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24, 26]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/checkout@v7
         with:
-          node-version: 20
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
           cache: npm
+          package-manager-cache: false
       - name: Install dependencies
         run: npm ci
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+      - name: Verify architecture boundaries
+        run: npm run verify:domain
       - name: Run test suites
         run: npm test

@@ -21,13 +21,34 @@ function parseProviderConfigurations(value) {
   return parsed;
 }
 function parseDatabaseUrl(value) {
-  if (value == null || value.trim() === '') return null;
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return null;
+  if (typeof value !== 'string') throw new Error('DATABASE_URL deve ser uma URL PostgreSQL válida.');
   let parsed;
   try { parsed = new URL(value); } catch { throw new Error('DATABASE_URL deve ser uma URL PostgreSQL válida.'); }
   if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname) {
     throw new Error('DATABASE_URL deve usar o protocolo postgres:// ou postgresql://.');
   }
   return value;
+}
+function parseSecret(value, name, minimumLength) {
+  const isPlaceholder = typeof value === 'string'
+    && /^(replace-with|change-me|changeme|your[-_]|example[-_])/i.test(value);
+  if (typeof value !== 'string' || value.length < minimumLength
+    || value.trim() !== value || /\s/.test(value) || isPlaceholder) {
+    throw new Error(name + ' deve ter pelo menos ' + minimumLength
+      + ' caracteres, sem espaços e sem valores de exemplo.');
+  }
+  return value;
+}
+function ensureDistinctSecrets(secrets) {
+  const seen = new Set();
+  for (const [name, value] of secrets) {
+    if (value === null || value === undefined) continue;
+    if (seen.has(value)) {
+      throw new Error(name + ' deve ser diferente dos demais segredos configurados.');
+    }
+    seen.add(value);
+  }
 }
 function parseUpstashUrl(value, nodeEnv) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -45,21 +66,24 @@ function parseUpstashUrl(value, nodeEnv) {
   }
   return parsed.toString().replace(/\/$/, '');
 }
-function parseWebhookUrl(value, nodeEnv) {
-  if (value == null || value.trim() === '') return null;
+function parseWebhookUrl(value) {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return null;
+  if (typeof value !== 'string') throw new Error('ALERT_WEBHOOK_URL deve ser uma URL HTTPS válida.');
   let parsed;
   try { parsed = new URL(value); } catch { throw new Error('ALERT_WEBHOOK_URL deve ser uma URL válida.'); }
-  if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || parsed.hash) {
-    throw new Error('ALERT_WEBHOOK_URL deve usar HTTPS e não pode conter credenciais ou fragmento.');
+  if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || parsed.hash || parsed.search) {
+    throw new Error('ALERT_WEBHOOK_URL deve usar HTTPS, sem credenciais, query string ou fragmento.');
   }
   return parsed.toString();
 }
 
 export function loadConfig(environment = process.env) {
-  const apiAccessToken = environment.API_ACCESS_TOKEN;
-  if (typeof apiAccessToken !== 'string' || apiAccessToken.length < 32) {
-    throw new Error('Defina API_ACCESS_TOKEN com pelo menos 32 caracteres antes de iniciar a API.');
+  const nodeEnv = environment.NODE_ENV ?? 'development';
+  if (!['development', 'test', 'production'].includes(nodeEnv)) {
+    throw new Error('NODE_ENV deve ser development, test ou production.');
   }
+
+  const apiAccessToken = parseSecret(environment.API_ACCESS_TOKEN, 'API_ACCESS_TOKEN', 32);
   const corsOrigins = (environment.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean);
   for (const origin of corsOrigins) {
     if (origin === '*') throw new Error('CORS_ORIGINS não permite wildcard.');
@@ -69,9 +93,11 @@ export function loadConfig(environment = process.env) {
       || parsed.username || parsed.password || parsed.search || parsed.hash) {
       throw new Error('CORS_ORIGINS deve conter origens HTTP(S) exatas, sem wildcard ou caminho.');
     }
+    if (nodeEnv === 'production' && parsed.protocol !== 'https:') {
+      throw new Error('CORS_ORIGINS deve usar HTTPS em produção.');
+    }
   }
   const databaseUrl = parseDatabaseUrl(environment.DATABASE_URL);
-  const nodeEnv = environment.NODE_ENV ?? 'development';
   if (nodeEnv === 'production' && !databaseUrl) throw new Error('DATABASE_URL é obrigatório em NODE_ENV=production.');
 
   const rateLimitStore = environment.RATE_LIMIT_STORE ?? 'memory';
@@ -82,11 +108,7 @@ export function loadConfig(environment = process.env) {
   let upstashRedisRestToken = null;
   if (rateLimitStore === 'upstash') {
     upstashRedisRestUrl = parseUpstashUrl(environment.UPSTASH_REDIS_REST_URL, nodeEnv);
-    if (typeof environment.UPSTASH_REDIS_REST_TOKEN !== 'string'
-      || environment.UPSTASH_REDIS_REST_TOKEN.trim().length < 16) {
-      throw new Error('UPSTASH_REDIS_REST_TOKEN é obrigatório quando RATE_LIMIT_STORE=upstash.');
-    }
-    upstashRedisRestToken = environment.UPSTASH_REDIS_REST_TOKEN;
+    upstashRedisRestToken = parseSecret(environment.UPSTASH_REDIS_REST_TOKEN, 'UPSTASH_REDIS_REST_TOKEN', 16);
   } else if (environment.UPSTASH_REDIS_REST_URL || environment.UPSTASH_REDIS_REST_TOKEN) {
     throw new Error('Configure UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN somente com RATE_LIMIT_STORE=upstash.');
   }
@@ -94,23 +116,25 @@ export function loadConfig(environment = process.env) {
     throw new Error('RATE_LIMIT_STORE=upstash é obrigatório em produção para quotas compartilhadas.');
   }
 
-  const metricsAccessToken = environment.METRICS_ACCESS_TOKEN ?? null;
-  if (metricsAccessToken !== null && metricsAccessToken.length < 32) {
-    throw new Error('METRICS_ACCESS_TOKEN deve ter pelo menos 32 caracteres.');
-  }
+  const metricsAccessToken = environment.METRICS_ACCESS_TOKEN == null
+    ? null
+    : parseSecret(environment.METRICS_ACCESS_TOKEN, 'METRICS_ACCESS_TOKEN', 32);
   if (nodeEnv === 'production' && !metricsAccessToken) {
     throw new Error('METRICS_ACCESS_TOKEN é obrigatório em produção para proteger /metrics.');
   }
 
-  const alertWebhookUrl = parseWebhookUrl(environment.ALERT_WEBHOOK_URL, nodeEnv);
+  const alertWebhookUrl = parseWebhookUrl(environment.ALERT_WEBHOOK_URL);
   let alertWebhookToken = null;
   if (environment.ALERT_WEBHOOK_TOKEN !== undefined && environment.ALERT_WEBHOOK_TOKEN !== '') {
     if (!alertWebhookUrl) throw new Error('ALERT_WEBHOOK_TOKEN exige ALERT_WEBHOOK_URL.');
-    if (typeof environment.ALERT_WEBHOOK_TOKEN !== 'string' || environment.ALERT_WEBHOOK_TOKEN.length < 16) {
-      throw new Error('ALERT_WEBHOOK_TOKEN deve ter pelo menos 16 caracteres.');
-    }
-    alertWebhookToken = environment.ALERT_WEBHOOK_TOKEN;
+    alertWebhookToken = parseSecret(environment.ALERT_WEBHOOK_TOKEN, 'ALERT_WEBHOOK_TOKEN', 16);
   }
+  ensureDistinctSecrets([
+    ['API_ACCESS_TOKEN', apiAccessToken],
+    ['UPSTASH_REDIS_REST_TOKEN', upstashRedisRestToken],
+    ['METRICS_ACCESS_TOKEN', metricsAccessToken],
+    ['ALERT_WEBHOOK_TOKEN', alertWebhookToken]
+  ]);
 
   return {
     host: environment.HOST ?? '127.0.0.1',

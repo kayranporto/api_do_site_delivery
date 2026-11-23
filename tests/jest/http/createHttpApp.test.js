@@ -56,6 +56,16 @@ describe('HTTP API', () => {
     expect(response.headers['www-authenticate']).toBe('Bearer');
   });
 
+  test('respostas da API não são armazenadas e o proxy não é confiável por padrão', async () => {
+    expect(app.get('trust proxy')).toBe(false);
+
+    const unauthorized = await request(app).get('/api/v1/integrations').expect(401);
+    expect(unauthorized.headers['cache-control']).toBe('no-store');
+
+    const authorized = await auth(request(app).get('/api/v1/integrations')).expect(200);
+    expect(authorized.headers['cache-control']).toBe('no-store');
+  });
+
   test('cria integração sem expor referências internas ou segredos', async () => {
     const response = await auth(request(app).post('/api/v1/integrations'))
       .send(integrationBody)

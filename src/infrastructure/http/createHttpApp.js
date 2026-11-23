@@ -112,6 +112,8 @@ export function createHttpApp({
 
   const app = express();
   app.disable('x-powered-by');
+  // Não confia em X-Forwarded-* até que uma cadeia de proxies confiáveis seja configurada.
+  app.set('trust proxy', false);
   app.use(requestContext);
   app.use(activeHttpMetrics.middleware());
   app.use(helmet());
@@ -168,6 +170,12 @@ export function createHttpApp({
   });
 
   app.locals.alertMonitor = activeAlertMonitor;
+
+  // Respostas autenticadas podem conter segredos de emissão; nunca permitir cache HTTP.
+  app.use('/api/v1', (_req, res, next) => {
+    res.setHeader('cache-control', 'no-store');
+    next();
+  });
 
   // Limite compartilhado por IP antes da autenticação para reduzir abuso anônimo.
   app.use('/api/v1', createRateLimiter({
