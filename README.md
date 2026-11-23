@@ -4,7 +4,7 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade) e 8 (Endurecimento operacional inicial) implementadas. O projeto ainda **não está pronto para produção**: o rate limiting local não é distribuído, a autenticação ainda usa um token compartilhado e faltam autorização por recurso, alertas e controles específicos do ambiente.
+Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial) e 9 (Credenciais e autorização) implementadas. O projeto ainda **não está pronto para produção**: o rate limiting local não é distribuído, a credencial master conserva acesso global e faltam expiração/rotação automática, alertas e controles específicos do ambiente.
 
 ## Instalação e execução
 
@@ -27,11 +27,11 @@ Execuções interrompidas ficam em estado **interrupted** e podem ser consultada
 
 Configure DATABASE_URL e DATABASE_POOL_MAX no arquivo .env. Antes de iniciar a API pela primeira vez, aplique a migration de forma explícita com **npm run db:migrate**. Depois, inicie com **npm start**.
 
-O servidor verifica a versão do schema, mas não aplica migrations automaticamente. Em NODE_ENV=production, DATABASE_URL é obrigatório.
+O servidor verifica a versão do schema, mas não aplica migrations automaticamente. Em NODE_ENV=production, DATABASE_URL é obrigatório. A migration 004 cria as tabelas de credenciais e auditoria de clientes.
 
 ## Configuração
 
-- **API_ACCESS_TOKEN**: token Bearer de serviço (mínimo 32 caracteres).
+- **API_ACCESS_TOKEN**: credencial master (mínimo 32 caracteres); mantenha em cofre de segredos e não a entregue aos consumidores.
 - **HOST**: por padrão 127.0.0.1.
 - **PORT**: por padrão 3000.
 - **NODE_ENV**: development por padrão; production exige PostgreSQL.
@@ -43,6 +43,12 @@ O servidor verifica a versão do schema, mas não aplica migrations automaticame
 - Segredos de provedores são referenciados como env:NOME_DA_VARIAVEL; não grave valores secretos no Git.
 
 O rate limiter é local ao processo. Em implantação com várias réplicas, configure limite compartilhado no gateway/WAF ou Redis. Consulte docs/production-hardening.md.
+
+## Credenciais de cliente
+
+Use a credencial master para criar chaves individuais em **POST /api/v1/clients**. A chave bruta é exibida somente na resposta de criação; o banco mantém apenas o hash. Atribua apenas os escopos e IDs de integração necessários. Use **POST /api/v1/clients/:clientId/revoke** para revogar uma chave e **GET /api/v1/clients/:clientId/audit** para consultar eventos administrativos e de autenticação. Consulte docs/authentication-authorization.md.
+
+Campo `integrationIds` omitido significa nenhum acesso a integrações; uma lista limita a IDs específicos; `null` dá acesso global. A criação de integrações e a gestão de credenciais permanecem exclusivas da master.
 
 ## Testes
 
@@ -59,4 +65,4 @@ Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions ex
 - tests: testes Node.js e Jest.
 - docs: decisões das camadas, contrato HTTP e persistência.
 
-Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md e docs/production-hardening.md para rotas, exemplos e limites operacionais.
+Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.

@@ -21,3 +21,26 @@ export const executeOperationSchema = z.object({
   payload: z.unknown().optional(),
   idempotencyKey: z.string().trim().min(8).max(128).optional()
 }).strict();
+
+const apiScopes = [
+  'integrations:read',
+  'integrations:manage',
+  'executions:read',
+  'executions:write',
+  'executions:reconcile',
+  'observability:read'
+];
+
+export const createApiClientSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  scopes: z.array(z.enum(apiScopes)).min(1).max(apiScopes.length)
+    .refine((items) => new Set(items).size === items.length, 'Escopos duplicados não são permitidos.'),
+  // null significa acesso a qualquer integração; omitir a propriedade significa nenhuma.
+  integrationIds: z.array(z.string().trim().min(1).max(128)).max(500)
+    .refine((items) => new Set(items).size === items.length, 'IDs de integração duplicados não são permitidos.')
+    .nullable().optional()
+}).strict();
+
+export const apiClientAuditQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100)
+});

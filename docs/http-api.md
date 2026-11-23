@@ -2,7 +2,7 @@
 
 ## Inicialização
 
-1. Instale Node.js 20 ou superior e execute `npm install`.
+1. Instale Node.js 20 ou superior e execute `npm ci`.
 2. Copie `.env.example` para `.env`.
 3. Defina `API_ACCESS_TOKEN` com um valor aleatório de pelo menos 32 caracteres.
 4. Configure `CORS_ORIGINS` com origens exatas, separadas por vírgula.
@@ -11,8 +11,11 @@
 ## Autenticação e controles
 
 - `GET /health` é público e serve apenas para liveness.
-- Todas as rotas `/api/v1/*` exigem `Authorization: Bearer <API_ACCESS_TOKEN>`.
-- O token é comparado em tempo constante quando os comprimentos coincidem.
+- Todas as rotas `/api/v1/*` exigem uma credencial Bearer.
+- `API_ACCESS_TOKEN` continua sendo a credencial master, com acesso global e uso exclusivo administrativo.
+- Credenciais individuais `gik_...` são verificadas por hash SHA-256 em tempo constante e carregam escopos e IDs de integração permitidos.
+- Chaves individuais são exibidas somente na criação; o banco guarda apenas o hash. Revogação passa a valer nas requisições seguintes.
+- Consulte `authentication-authorization.md` para os escopos, rotas administrativas e política de isolamento.
 - Helmet define cabeçalhos de segurança; CORS usa allowlist exata, sem wildcard.
 - O middleware de autenticação é executado antes do parser JSON.
 - O parser aceita JSON estrito até 64 KiB.
@@ -109,8 +112,20 @@ Todos esses endpoints exigem o mesmo Bearer token de serviço. Os eventos guarda
 ## Limitações antes de produção
 
 - Repositórios atuais são em memória e perdem dados ao reiniciar.
-- Não há autenticação de usuários, papéis, escopos ou autorização por integração.
-- O token Bearer compartilhado não substitui controle de acesso por recurso.
-- Ainda não há rate limiting, autorização por integração, painel de operação, alertas ou política de retenção automatizada dos eventos.
+- A credencial master continua tendo acesso global; aplicações consumidoras devem usar chaves individuais restritas.
+- O rate limiting continua local por IP e não é distribuído entre réplicas.
+- Ainda faltam expiração e rotação automática de chaves, alertas, painel de operação e política automática de retenção dos eventos.
 - O adaptador HTTP restringe hosts, mas uma implantação de produção ainda precisa de políticas de egress, firewall e proteção DNS/IP no ambiente.
 - Provedores reais só devem ser configurados depois de revisão das permissões e dos requisitos operacionais.
+
+
+## Credenciais individuais (Etapa 9)
+
+| Método | Caminho | Permissão |
+|---|---|---|
+| POST | `/api/v1/clients` | Master: criar credencial individual |
+| GET | `/api/v1/clients` | Master: listar metadados das credenciais |
+| POST | `/api/v1/clients/:clientId/revoke` | Master: revogar credencial |
+| GET | `/api/v1/clients/:clientId/audit` | Master: consultar auditoria |
+
+A credencial individual precisa ter o escopo adequado para cada rota. O campo `integrationIds` limita as integrações e as execuções acessíveis; a ausência do campo ou uma lista vazia significa nenhum acesso, enquanto `null` significa acesso global. A criação de integrações e a administração de credenciais exigem a credencial master.

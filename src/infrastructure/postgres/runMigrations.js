@@ -1,11 +1,12 @@
 import { readFile } from 'node:fs/promises';
 
-export const POSTGRES_SCHEMA_VERSION = '003_operational_events';
+export const POSTGRES_SCHEMA_VERSION = '004_api_clients';
 const MIGRATION_LOCK_ID = '520260519';
 const MIGRATIONS = [
   { version: '001_initial_schema', file: '../../../database/migrations/001_initial_schema.sql' },
   { version: '002_execution_interrupted', file: '../../../database/migrations/002_execution_interrupted.sql' },
-  { version: '003_operational_events', file: '../../../database/migrations/003_operational_events.sql' }
+  { version: '003_operational_events', file: '../../../database/migrations/003_operational_events.sql' },
+  { version: '004_api_clients', file: '../../../database/migrations/004_api_clients.sql' }
 ];
 
 export async function runMigrations(pool) {

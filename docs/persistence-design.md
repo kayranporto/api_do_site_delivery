@@ -47,3 +47,10 @@ A tabela execution_events registra eventos de tentativa, interrupção e reconci
 - A aplicação não cria banco, usuário, rede, segredo ou infraestrutura gerenciada.
 - O adaptador em memória é volátil e serve somente para testes/desenvolvimento.
 - Não foi configurado nem migrado nenhum banco remoto nesta etapa.
+
+
+## Etapa 9 — Credenciais de API
+
+A migration `004_api_clients` adiciona a tabela `api_clients`, que guarda prefixo, hash SHA-256, escopos, allowlist de integrações e datas de criação, revogação e último uso. A tabela `api_client_audit` registra criação, autenticação e revogação. O segredo bruto não é persistido.
+
+A infraestrutura fornece `InMemoryApiClientRepository` para testes/desenvolvimento e `PostgresApiClientRepository` para persistência. O composition root injeta o repositório na autenticação HTTP e nos casos de uso de gestão de credenciais. O migrador agora exige a versão `004_api_clients`; execute `npm run db:migrate` explicitamente em ambientes PostgreSQL já existentes.

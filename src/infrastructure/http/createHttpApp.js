@@ -10,6 +10,8 @@ import { createV1Router } from './routes/v1.js';
 export function createHttpApp({
   useCases,
   apiAccessToken,
+  apiClientRepository,
+  executionRepository,
   corsOrigins = [],
   jsonLimit = '64kb',
   rateLimitWindowMs = 60_000,
@@ -48,14 +50,13 @@ export function createHttpApp({
   }));
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-  // Aplica o limite antes da autenticação e do parser JSON.
   app.use('/api/v1', createRateLimiter({
     windowMs: rateLimitWindowMs,
     maxRequests: rateLimitMax
   }));
-  app.use('/api/v1', apiKeyAuth({ token: apiAccessToken }));
+  app.use('/api/v1', apiKeyAuth({ token: apiAccessToken, apiClientRepository }));
   app.use(express.json({ limit: jsonLimit, strict: true, type: 'application/json' }));
-  app.use('/api/v1', createV1Router({ useCases }));
+  app.use('/api/v1', createV1Router({ useCases, apiClientRepository, executionRepository }));
   app.use((_req, res) => res.status(404).json({
     error: { code: 'ROUTE_NOT_FOUND', message: 'Rota não encontrada.', requestId: res.getHeader('x-request-id') }
   }));

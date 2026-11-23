@@ -11,7 +11,11 @@ import {
   RecoverStaleExecutions,
   ReconcileInterruptedExecution,
   GetOperationalMetrics,
-  GetExecutionEvents
+  GetExecutionEvents,
+  CreateApiClient,
+  ListApiClients,
+  RevokeApiClient,
+  ListApiClientAudit
 } from '../application/index.js';
 import {
   EnvironmentSecretResolver,
@@ -19,10 +23,12 @@ import {
   InMemoryExecutionRepository,
   InMemoryIntegrationRepository,
   InMemoryOperationalEventRepository,
+  InMemoryApiClientRepository,
   MapConfigurationResolver,
   MapProviderRegistry,
   SystemClock,
-  UuidGenerator
+  UuidGenerator,
+  RandomApiKeyGenerator
 } from '../infrastructure/index.js';
 
 /** Composition root. Por padrão usa memória: adequado apenas para desenvolvimento local. */
@@ -37,8 +43,10 @@ export function createContainer({
   const integrationRepository = repositories.integration ?? new InMemoryIntegrationRepository();
   const executionRepository = repositories.execution ?? new InMemoryExecutionRepository();
   const eventRepository = repositories.events ?? new InMemoryOperationalEventRepository();
+  const apiClientRepository = repositories.apiClients ?? new InMemoryApiClientRepository();
   const clock = new SystemClock();
   const idGenerator = new UuidGenerator();
+  const apiKeyGenerator = new RandomApiKeyGenerator();
   const configurationResolver = new MapConfigurationResolver(providerConfigurations);
   const secretResolver = new EnvironmentSecretResolver(environment);
   const providerRegistry = new MapProviderRegistry();
@@ -92,12 +100,16 @@ export function createContainer({
       clock,
       staleAfterMs,
       leaseMs: executionLeaseMs
-    })
+    }),
+    createApiClient: new CreateApiClient({ apiClientRepository, idGenerator, clock, apiKeyGenerator }),
+    listApiClients: new ListApiClients({ apiClientRepository }),
+    revokeApiClient: new RevokeApiClient({ apiClientRepository, clock }),
+    listApiClientAudit: new ListApiClientAudit({ apiClientRepository })
   };
 
   return {
-    repositories: { integrationRepository, executionRepository, eventRepository },
-    adapters: { providerRegistry, configurationResolver, secretResolver, clock, idGenerator },
+    repositories: { integrationRepository, executionRepository, eventRepository, apiClientRepository },
+    adapters: { providerRegistry, configurationResolver, secretResolver, clock, idGenerator, apiKeyGenerator },
     useCases
   };
 }

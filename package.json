@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand && npm run test:node",
-    "test:node": "node --test tests/node/domain.test.js tests/node/application.test.js tests/node/infrastructure.test.js tests/node/application-stage4.test.js tests/node/infrastructure-config.test.js tests/node/postgres-repositories.test.js tests/node/worker-stage6.test.js tests/node/worker-config.test.js tests/node/observability-stage7.test.js tests/node/rate-limit-stage8.test.js",
+    "test:node": "node --test tests/node/domain.test.js tests/node/application.test.js tests/node/infrastructure.test.js tests/node/application-stage4.test.js tests/node/infrastructure-config.test.js tests/node/postgres-repositories.test.js tests/node/worker-stage6.test.js tests/node/worker-config.test.js tests/node/observability-stage7.test.js tests/node/rate-limit-stage8.test.js tests/node/auth-stage9.test.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "verify:domain": "node ./scripts/verify-domain.mjs",
     "db:migrate": "node ./scripts/migrate-postgres.js",

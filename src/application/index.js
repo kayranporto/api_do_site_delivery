@@ -23,3 +23,8 @@ export { OperationalEventRepository } from './ports/OperationalEventRepository.j
 export { ReconcileInterruptedExecution } from './use-cases/ReconcileInterruptedExecution.js';
 export { GetOperationalMetrics } from './use-cases/GetOperationalMetrics.js';
 export { GetExecutionEvents } from './use-cases/GetExecutionEvents.js';
+export { ApiClientRepository } from './ports/ApiClientRepository.js';
+export { CreateApiClient } from './use-cases/CreateApiClient.js';
+export { ListApiClients } from './use-cases/ListApiClients.js';
+export { RevokeApiClient } from './use-cases/RevokeApiClient.js';
+export { ListApiClientAudit } from './use-cases/ListApiClientAudit.js';

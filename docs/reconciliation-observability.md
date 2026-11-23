@@ -18,7 +18,7 @@ A API permite consultar eventos por execução em GET /api/v1/executions/:execut
 
 ## Métricas
 
-GET /api/v1/observability/metrics?windowHours=24 retorna total de execuções por estado atual, total de eventos na janela e distribuição de eventos por tipo e severidade. A janela aceita 1 a 720 horas. O endpoint usa a autenticação Bearer de serviço existente; não é público.
+GET /api/v1/observability/metrics?windowHours=24 retorna total de execuções por estado atual, total de eventos na janela e distribuição de eventos por tipo e severidade. A janela aceita 1 a 720 horas. O endpoint exige uma credencial Bearer com o escopo `observability:read`. A credencial master mantém acesso global; chaves individuais podem ser restritas por escopos e IDs de integração.
 
 ## Limites
 

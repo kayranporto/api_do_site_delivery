@@ -1,7 +1,9 @@
 export { InMemoryIntegrationRepository } from './repositories/InMemoryIntegrationRepository.js';
 export { InMemoryExecutionRepository } from './repositories/InMemoryExecutionRepository.js';
+export { InMemoryApiClientRepository } from './repositories/InMemoryApiClientRepository.js';
 export { PostgresIntegrationRepository } from './repositories/PostgresIntegrationRepository.js';
 export { PostgresExecutionRepository } from './repositories/PostgresExecutionRepository.js';
+export { PostgresApiClientRepository } from './repositories/PostgresApiClientRepository.js';
 export { createPostgresPersistence } from './postgres/createPostgresPersistence.js';
 export { runMigrations, migratePostgresDatabase, POSTGRES_SCHEMA_VERSION } from './postgres/runMigrations.js';
 export { MapConfigurationResolver, ConfigurationNotFoundError } from './configuration/MapConfigurationResolver.js';
@@ -11,6 +13,7 @@ export { HttpRestProviderAdapter } from './providers/HttpRestProviderAdapter.js'
 export { SystemClock } from './system/SystemClock.js';
 export { UuidGenerator } from './system/UuidGenerator.js';
 export { loadConfig } from './configuration/loadConfig.js';
+export { RandomApiKeyGenerator, hashApiKey } from './security/RandomApiKeyGenerator.js';
 
 export { InMemoryOperationalEventRepository } from './repositories/InMemoryOperationalEventRepository.js';
 export { PostgresOperationalEventRepository } from './repositories/PostgresOperationalEventRepository.js';
