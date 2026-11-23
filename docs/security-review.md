@@ -8,7 +8,7 @@
 - URLs de webhook usam HTTPS e não podem incluir credenciais, query string ou fragmento. O segredo, quando necessário, deve ser enviado no header Authorization.
 - Todas as respostas de `/api/v1`, inclusive erros de autenticação, recebem `Cache-Control: no-store`; respostas de criação/rotação de chave não devem ser armazenadas por caches intermediários.
 - `trust proxy` permanece explicitamente desativado. Cabeçalhos `X-Forwarded-For` fornecidos por clientes não são considerados origem confiável para rate limiting.
-- O CI usa actions com runtime Node 24, não persiste credenciais do checkout, testa Node.js 22, 24 e 26, executa auditoria npm e verifica os limites da arquitetura.
+- O CI usa actions fixadas por SHA imutável com runtime Node 24, não persiste credenciais do checkout, testa Node.js 22, 24 e 26, executa auditoria npm geral e uma auditoria mais rígida apenas das dependências de produção.
 - Dependabot verifica semanalmente atualizações de dependências npm e GitHub Actions.
 
 ## Checklist obrigatório antes do primeiro deploy
@@ -30,6 +30,7 @@
 - `trust proxy` está desligado de propósito. Atrás de proxy, a origem vista pelo rate limiter pode ser o próprio proxy até que uma política confiável seja definida.
 - Auditoria de credenciais e histórico de alertas exigem retenção/centralização operacional; buffers em memória não são evidência durável.
 - A proteção de branch, exigência de revisão por PR e configurações da conta GitHub não foram alteradas. A integração GitHub disponível não autorizou a leitura das regras de proteção do branch.
+- A auditoria npm desta revisão reportou 18 alertas moderados em dependências de desenvolvimento transitivas do Jest (cadeia `glob`/`minimatch`); não houve alerta de alta ou crítica gravidade no limite aplicado. O CI também passa a exigir ausência de alertas moderados ou superiores nas dependências de produção. Os alertas de desenvolvimento permanecem registrados para atualização via Dependabot.
 - O CI verifica vulnerabilidades reportadas pelo npm no momento de cada execução; isso não substitui análise contínua, SCA dedicada, análise estática, secret scanning, pentest ou revisão de configuração da hospedagem.
 
 ## Resultado
