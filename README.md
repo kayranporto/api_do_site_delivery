@@ -4,7 +4,7 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial), 9 (Credenciais e autorização), 10 (Ciclo de vida e quotas de credenciais) 11 (Rate limiting distribuído e consumo por cliente) e 12 (Monitoramento, métricas HTTP e alertas operacionais) implementadas.
+Etapas 1 a 13 implementadas: Domain, Application, Infrastructure, HTTP, PostgreSQL, Worker, reconciliação/observabilidade, endurecimento operacional, credenciais/autorização, ciclo de vida/quota, rate limiting distribuído, métricas/alertas e integração de monitoramento centralizado.
 
 O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, calibrar os limites de alerta por ambiente e integrar notificações externas/monitoramento centralizado.
 
@@ -46,9 +46,9 @@ As chamadas autenticadas por credencial individual geram contagens diárias no R
 - **GET /api/v1/observability/performance?windowMinutes=5**: contagem HTTP, status, taxa 5xx/429, latência média/p50/p95/máxima, rotas, uso de memória e CPU do processo.
 - **GET /api/v1/observability/alerts?windowMinutes=5**: avalia regras configuráveis de p95, erro 5xx, respostas 429 e RSS.
 
-Os endpoints de observabilidade exigem escopo global `observability:read`; chaves restritas por integração não podem consultar agregados globais. As métricas HTTP são locais à instância, guardam no máximo 10.000 amostras recentes, usam templates de rota (não IDs, IPs, payloads ou query strings) e são perdidas ao reiniciar. Alertas são avaliações JSON na API; não enviam e-mail, Slack, webhook ou SMS. Consulte docs/monitoring-alerts.md.
+Os endpoints de observabilidade exigem escopo global `observability:read`; chaves restritas por integração não podem consultar agregados globais. As métricas HTTP são locais à instância, guardam no máximo 10.000 amostras recentes, usam templates de rota (não IDs, IPs, payloads ou query strings) e são perdidas ao reiniciar. A rota `/metrics` oferece exposição Prometheus protegida por credencial separada. Quando `ALERT_WEBHOOK_URL` está configurada, o monitor envia eventos de início, lembrete e recuperação com deduplicação e cooldown. Consulte docs/monitoring-alerts.md.
 
-As variáveis `OBSERVABILITY_WINDOW_MINUTES`, `ALERT_MIN_REQUESTS`, `ALERT_P95_LATENCY_MS`, `ALERT_ERROR_RATE_PERCENT`, `ALERT_429_RATE_PERCENT` e `ALERT_RSS_MB` controlam a janela padrão e os limites.
+As variáveis `OBSERVABILITY_WINDOW_MINUTES`, `ALERT_MIN_REQUESTS`, `ALERT_P95_LATENCY_MS`, `ALERT_ERROR_RATE_PERCENT`, `ALERT_429_RATE_PERCENT`, `ALERT_RSS_MB`, `ALERT_NOTIFICATION_INTERVAL_MS` e `ALERT_NOTIFICATION_COOLDOWN_MS` controlam janela, limites e cadência dos alertas. Em produção, configure também `METRICS_ACCESS_TOKEN` para scraping e, quando desejar notificações diretas, `ALERT_WEBHOOK_URL` (HTTPS) e opcionalmente `ALERT_WEBHOOK_TOKEN`.
 
 ## Credenciais de cliente
 
@@ -64,7 +64,7 @@ Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions ex
 
 - src/domain: entidades, Value Objects, erros e portas.
 - src/application: casos de uso e contratos de saída.
-- src/infrastructure: repositórios em memória e PostgreSQL, provedores, rate limiting, observabilidade HTTP e adaptadores.
+- src/infrastructure: repositórios em memória e PostgreSQL, provedores, rate limiting, observabilidade HTTP, exportação Prometheus e notificações webhook.
 - database/migrations: schema versionado do PostgreSQL.
 - src/bootstrap: composição de dependências.
 - src/server.js: inicialização do servidor Express.

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -7,9 +8,19 @@ import { createRateLimiter } from './middleware/rateLimit.js';
 import { createInMemoryRateLimitStore } from '../rate-limits/InMemoryRateLimitStore.js';
 import { HttpMetrics } from '../observability/HttpMetrics.js';
 import { OperationalAlertEvaluator } from '../observability/OperationalAlertEvaluator.js';
+import { AlertMonitor } from '../observability/AlertMonitor.js';
+import { renderPrometheusMetrics } from '../observability/PrometheusMetricsExporter.js';
 import { recordApiClientAuthentication } from './middleware/recordApiClientAuthentication.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createV1Router } from './routes/v1.js';
+
+function matchesBearerToken(req, expected) {
+  const match = /^Bearer ([^\s]+)$/i.exec(req.get('authorization') ?? '');
+  if (!match) return false;
+  const received = Buffer.from(match[1], 'utf8');
+  const configured = Buffer.from(expected, 'utf8');
+  return received.length === configured.length && timingSafeEqual(received, configured);
+}
 
 export function createHttpApp({
   useCases,
@@ -20,6 +31,11 @@ export function createHttpApp({
   httpMetrics,
   alertEvaluator,
   alertThresholds,
+  alertNotifier = null,
+  alertMonitor,
+  metricsAccessToken = null,
+  alertNotificationIntervalMs = 60_000,
+  alertNotificationCooldownMs = 300_000,
   readinessChecks = {},
   observabilityWindowMinutes = 5,
   corsOrigins = [],
@@ -54,6 +70,10 @@ export function createHttpApp({
   if (!Number.isInteger(observabilityWindowMinutes) || observabilityWindowMinutes < 1 || observabilityWindowMinutes > 60) {
     throw new RangeError('observabilityWindowMinutes deve estar entre 1 e 60.');
   }
+  if (metricsAccessToken !== null
+    && (typeof metricsAccessToken !== 'string' || metricsAccessToken.length < 32)) {
+    throw new TypeError('metricsAccessToken deve ter pelo menos 32 caracteres.');
+  }
 
   const activeRateLimitStore = rateLimitStore ?? createInMemoryRateLimitStore();
   if (typeof activeRateLimitStore.consume !== 'function'
@@ -67,6 +87,20 @@ export function createHttpApp({
   const activeAlertEvaluator = alertEvaluator ?? new OperationalAlertEvaluator(alertThresholds);
   if (typeof activeAlertEvaluator.evaluate !== 'function') {
     throw new TypeError('alertEvaluator deve implementar evaluate().');
+  }
+  const activeAlertMonitor = alertMonitor ?? new AlertMonitor({
+    httpMetrics: activeHttpMetrics,
+    alertEvaluator: activeAlertEvaluator,
+    notifier: alertNotifier,
+    windowMinutes: observabilityWindowMinutes,
+    intervalMs: alertNotificationIntervalMs,
+    cooldownMs: alertNotificationCooldownMs,
+    onError: () => process.stderr.write('Falha ao entregar alerta operacional ao webhook configurado.\n')
+  });
+  if (typeof activeAlertMonitor.check !== 'function'
+    || typeof activeAlertMonitor.start !== 'function'
+    || typeof activeAlertMonitor.stop !== 'function') {
+    throw new TypeError('alertMonitor deve implementar check(), start() e stop().');
   }
 
   const checks = { ...readinessChecks };
@@ -105,6 +139,21 @@ export function createHttpApp({
       checks: Object.fromEntries(results)
     });
   });
+  app.get('/metrics', (req, res) => {
+    if (!metricsAccessToken) return res.status(404).end();
+    if (!matchesBearerToken(req, metricsAccessToken)) {
+      res.setHeader('www-authenticate', 'Bearer');
+      return res.status(401).json({
+        error: { code: 'METRICS_AUTH_REQUIRED', message: 'Autenticação exclusiva de métricas necessária.' }
+      });
+    }
+    const snapshot = activeHttpMetrics.snapshot({ windowMinutes: observabilityWindowMinutes });
+    res.setHeader('content-type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.setHeader('cache-control', 'no-store');
+    return res.status(200).send(renderPrometheusMetrics(snapshot));
+  });
+
+  app.locals.alertMonitor = activeAlertMonitor;
 
   // Limite compartilhado por IP antes da autenticação para reduzir abuso anônimo.
   app.use('/api/v1', createRateLimiter({

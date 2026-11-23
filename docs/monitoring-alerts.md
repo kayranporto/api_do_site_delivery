@@ -1,4 +1,4 @@
-# Etapa 12 — Monitoramento, métricas e alertas
+# Etapa 12/13 — Monitoramento, métricas e alertas centralizados
 
 ## Readiness e liveness
 
@@ -47,9 +47,37 @@ ALERT_RSS_MB=512
 
 Ambos os endpoints de observabilidade exigem credencial com escopo global `observability:read`. Uma credencial individual com lista de integrações limitada não consegue consultar métricas agregadas de toda a API.
 
+## Exportação Prometheus — Etapa 13
+
+A rota `GET /metrics` oferece Prometheus exposition format 0.0.4, com gauges da janela móvel HTTP e métricas do processo. O scraping usa uma credencial independente da master:
+
+```http
+GET /metrics
+Authorization: Bearer {METRICS_ACCESS_TOKEN}
+```
+
+Em desenvolvimento, a rota fica desabilitada (404) enquanto o token não estiver definido. Em produção, `METRICS_ACCESS_TOKEN` com pelo menos 32 caracteres é obrigatório. Configure o Prometheus para fazer scrape de cada instância e armazene o token como segredo do job. Os dados incluem contagens na janela, status, latência média/p50/p95/máxima, rotas Express limitadas a templates e uso de memória/CPU.
+
+## Notificações automáticas por webhook
+
+Quando `ALERT_WEBHOOK_URL` é configurada, o servidor inicia um monitor periódico que avalia as mesmas regras de alerta. A URL precisa usar HTTPS em qualquer ambiente. `ALERT_WEBHOOK_TOKEN` é opcional e vai somente no header Authorization.
+
+O corpo enviado contém `event`, `status` (`firing` ou `resolved`), `generatedAt`, `instanceId`, `windowMinutes`, alertas com código/severidade/valor/limite e códigos recuperados. Não inclui dados de requisição nem credenciais. O monitor envia notificações quando um código entra em firing, lembretes após `ALERT_NOTIFICATION_COOLDOWN_MS` e eventos de resolução quando deixa de disparar. O envio é repetido no ciclo seguinte se falhar; redirects são recusados e existe timeout.
+
+Exemplo de configuração:
+
+```dotenv
+METRICS_ACCESS_TOKEN=use-a-separate-random-secret-at-least-32-characters
+ALERT_WEBHOOK_URL=https://alerts.example.com/api/webhooks/your-endpoint
+ALERT_WEBHOOK_TOKEN=optional-bearer-secret
+ALERT_NOTIFICATION_INTERVAL_MS=60000
+ALERT_NOTIFICATION_COOLDOWN_MS=300000
+```
+
+O endpoint do webhook é configurado pelo operador, nunca por usuários da API. Restrinja egress e permita somente destinos confiáveis. O formato do corpo é JSON genérico; a integração de destino deve aceitar esse contrato ou usar um adaptador próprio.
+
 ## Limitações
 
-- Alertas são calculados quando a rota é consultada; não existe agendador, histórico persistido de incidentes ou envio por e-mail, Slack, SMS ou webhook.
-- Métricas HTTP são por processo. Em várias réplicas, cada instância mostra apenas sua própria amostra.
-- O buffer é volátil e não substitui telemetria histórica nem auditoria contábil.
-- Para alertas proativos e visibilidade multi-instância, conecte exportação Prometheus/OpenTelemetry e um serviço externo de alertas.
+- Métricas e estado de deduplicação são locais ao processo; cada réplica produz sua própria série de métricas e suas próprias notificações. O scraping centralizado deve coletar todas as instâncias.
+- O buffer é volátil e não substitui histórico durável nem auditoria contábil.
+- O webhook não implementa persistência de fila, retry exponencial durável, dashboard ou formatos específicos para plataformas de chat.

@@ -6,6 +6,7 @@ import { createPostgresPersistence } from './infrastructure/postgres/createPostg
 import { loadConfig } from './infrastructure/configuration/loadConfig.js';
 import { createHttpApp } from './infrastructure/http/createHttpApp.js';
 import { UpstashRedisRateLimitStore } from './infrastructure/rate-limits/UpstashRedisRateLimitStore.js';
+import { WebhookAlertNotifier } from './infrastructure/observability/WebhookAlertNotifier.js';
 
 export async function buildHttpApplication({ config = loadConfig(), container } = {}) {
   let activeContainer = container;
@@ -43,6 +44,12 @@ export async function buildHttpApplication({ config = loadConfig(), container } 
       token: config.upstashRedisRestToken
     })
     : undefined;
+  const alertNotifier = config.alertWebhookUrl
+    ? new WebhookAlertNotifier({
+      url: config.alertWebhookUrl,
+      token: config.alertWebhookToken
+    })
+    : null;
 
   const app = createHttpApp({
     useCases: activeContainer.useCases,
@@ -51,6 +58,10 @@ export async function buildHttpApplication({ config = loadConfig(), container } 
     executionRepository: activeContainer.repositories.executionRepository,
     rateLimitStore,
     readinessChecks,
+    metricsAccessToken: config.metricsAccessToken,
+    alertNotifier,
+    alertNotificationIntervalMs: config.alertNotificationIntervalMs,
+    alertNotificationCooldownMs: config.alertNotificationCooldownMs,
     alertThresholds: {
       minRequests: config.alertMinRequests,
       p95LatencyMs: config.alertP95LatencyMs,
@@ -85,10 +96,13 @@ export async function startServer({ config = loadConfig(), container } = {}) {
     throw new Error('Não foi possível iniciar o servidor HTTP.', { cause: error });
   }
 
+  application.app.locals.alertMonitor?.start();
+
   return {
     ...application,
     server,
     async close() {
+      application.app.locals.alertMonitor?.stop();
       await new Promise((resolveClose, rejectClose) => {
         server.close((error) => error ? rejectClose(error) : resolveClose());
       });

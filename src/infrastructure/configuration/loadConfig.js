@@ -45,6 +45,15 @@ function parseUpstashUrl(value, nodeEnv) {
   }
   return parsed.toString().replace(/\/$/, '');
 }
+function parseWebhookUrl(value, nodeEnv) {
+  if (value == null || value.trim() === '') return null;
+  let parsed;
+  try { parsed = new URL(value); } catch { throw new Error('ALERT_WEBHOOK_URL deve ser uma URL válida.'); }
+  if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || parsed.hash) {
+    throw new Error('ALERT_WEBHOOK_URL deve usar HTTPS e não pode conter credenciais ou fragmento.');
+  }
+  return parsed.toString();
+}
 
 export function loadConfig(environment = process.env) {
   const apiAccessToken = environment.API_ACCESS_TOKEN;
@@ -85,6 +94,24 @@ export function loadConfig(environment = process.env) {
     throw new Error('RATE_LIMIT_STORE=upstash é obrigatório em produção para quotas compartilhadas.');
   }
 
+  const metricsAccessToken = environment.METRICS_ACCESS_TOKEN ?? null;
+  if (metricsAccessToken !== null && metricsAccessToken.length < 32) {
+    throw new Error('METRICS_ACCESS_TOKEN deve ter pelo menos 32 caracteres.');
+  }
+  if (nodeEnv === 'production' && !metricsAccessToken) {
+    throw new Error('METRICS_ACCESS_TOKEN é obrigatório em produção para proteger /metrics.');
+  }
+
+  const alertWebhookUrl = parseWebhookUrl(environment.ALERT_WEBHOOK_URL, nodeEnv);
+  let alertWebhookToken = null;
+  if (environment.ALERT_WEBHOOK_TOKEN !== undefined && environment.ALERT_WEBHOOK_TOKEN !== '') {
+    if (!alertWebhookUrl) throw new Error('ALERT_WEBHOOK_TOKEN exige ALERT_WEBHOOK_URL.');
+    if (typeof environment.ALERT_WEBHOOK_TOKEN !== 'string' || environment.ALERT_WEBHOOK_TOKEN.length < 16) {
+      throw new Error('ALERT_WEBHOOK_TOKEN deve ter pelo menos 16 caracteres.');
+    }
+    alertWebhookToken = environment.ALERT_WEBHOOK_TOKEN;
+  }
+
   return {
     host: environment.HOST ?? '127.0.0.1',
     port: parsePort(environment.PORT),
@@ -101,6 +128,11 @@ export function loadConfig(environment = process.env) {
     alertErrorRatePercent: boundedInteger(environment.ALERT_ERROR_RATE_PERCENT, 5, 1, 100, 'ALERT_ERROR_RATE_PERCENT'),
     alert429RatePercent: boundedInteger(environment.ALERT_429_RATE_PERCENT, 20, 1, 100, 'ALERT_429_RATE_PERCENT'),
     alertRssMb: boundedInteger(environment.ALERT_RSS_MB, 512, 1, 65_536, 'ALERT_RSS_MB'),
+    metricsAccessToken,
+    alertWebhookUrl,
+    alertWebhookToken,
+    alertNotificationIntervalMs: boundedInteger(environment.ALERT_NOTIFICATION_INTERVAL_MS, 60_000, 5_000, 3_600_000, 'ALERT_NOTIFICATION_INTERVAL_MS'),
+    alertNotificationCooldownMs: boundedInteger(environment.ALERT_NOTIFICATION_COOLDOWN_MS, 300_000, 10_000, 86_400_000, 'ALERT_NOTIFICATION_COOLDOWN_MS'),
     rateLimitStore,
     upstashRedisRestUrl,
     upstashRedisRestToken,

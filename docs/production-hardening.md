@@ -28,12 +28,21 @@ O middleware coleta métricas HTTP concluídas por instância: volume, status 4x
 
 `GET /api/v1/observability/performance?windowMinutes=5` expõe métricas de 1 a 60 minutos. `GET /api/v1/observability/alerts?windowMinutes=5` avalia limites de p95, proporção de 5xx, proporção de 429 e RSS. Ambos exigem escopo global `observability:read`. Os limites podem ser ajustados pelas variáveis ALERT_* e pela janela padrão OBSERVABILITY_WINDOW_MINUTES.
 
-Os dados são efêmeros e locais ao processo: cada réplica tem seu próprio buffer e reiniciar a aplicação remove as amostras. Os alertas são regras avaliadas sob demanda e devolvidas como JSON; não há envio de notificações ou estado persistente de incidentes. Para monitoramento multi-instância, retenção e acionamento, encaminhe métricas para Prometheus/OpenTelemetry ou um serviço central e integre um canal de alertas externo.
+Os dados são efêmeros e locais ao processo: cada réplica tem seu próprio buffer e reiniciar a aplicação remove as amostras. Os alertas são avaliados periodicamente quando o webhook está configurado; a entrega usa deduplicação e cooldown em memória da instância. Para monitoramento multi-instância, retenção e acionamento, encaminhe métricas para Prometheus/OpenTelemetry ou um serviço central e integre um canal de alertas externo.
+
+## Exportação e notificações — Etapa 13
+
+A rota `GET /metrics` publica a janela móvel em Prometheus exposition format 0.0.4. Ela exige `Authorization: Bearer <METRICS_ACCESS_TOKEN>`, token exclusivo com pelo menos 32 caracteres; a credencial master não substitui esse token. Em produção, a configuração exige `METRICS_ACCESS_TOKEN`. Configure o Prometheus para fazer scrape de cada réplica e proteger o segredo no cofre de credenciais.
+
+Quando `ALERT_WEBHOOK_URL` está configurada, a aplicação verifica alertas periodicamente e envia JSON estruturado para um endpoint HTTPS. `ALERT_WEBHOOK_TOKEN` é opcional e enviado somente no header Authorization. O monitor deduplica por código, envia lembretes após o cooldown e informa recuperação. Falhas são tentadas novamente no próximo ciclo. Redirecionamentos HTTP são recusados.
+
+A URL do webhook é uma configuração de saída: restrinja egress/firewall para os destinos aprovados e não use endpoints controlados por usuários da API. O payload não inclui payloads das operações, IPs, tokens, headers ou credenciais.
 
 ## Limitações remanescentes
 
 - A telemetria de consumo do Upstash tem retenção de 35 dias e não é um livro contábil nem uma fonte de faturamento.
 - A credencial master permanece global e deve ser mantida fora das aplicações consumidoras; chaves individuais têm escopos e allowlists de integração.
 - /health é uma verificação de processo, não uma prova de prontidão do banco, do worker ou do Redis.
-- Não há notificações de alerta, dashboard, exportação Prometheus/OpenTelemetry, SIEM ou política automática de retenção para eventos operacionais.
+- O buffer de métricas e a deduplicação do monitor permanecem locais a cada processo; não há agregação entre réplicas nem histórico durável de incidentes.
+- O webhook envia um formato JSON genérico; não há formatação específica para Slack/Discord nem dashboard, SIEM ou exporter OTLP.
 - A implantação ainda precisa de TLS, firewall/egress, gestão/rotação de segredos, backup PostgreSQL e monitoramento externo.

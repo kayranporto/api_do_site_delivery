@@ -21,3 +21,6 @@ export { HttpMetrics } from './observability/HttpMetrics.js';
 export { OperationalAlertEvaluator } from './observability/OperationalAlertEvaluator.js';
 export { InMemoryRateLimitStore, createInMemoryRateLimitStore } from './rate-limits/InMemoryRateLimitStore.js';
 export { UpstashRedisRateLimitStore } from './rate-limits/UpstashRedisRateLimitStore.js';
+export { AlertMonitor } from './observability/AlertMonitor.js';
+export { renderPrometheusMetrics } from './observability/PrometheusMetricsExporter.js';
+export { WebhookAlertNotifier } from './observability/WebhookAlertNotifier.js';

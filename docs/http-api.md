@@ -11,6 +11,7 @@
 ## Autenticação e controles
 
 - `GET /health` é público e serve apenas para liveness.
+- `GET /metrics` exige `METRICS_ACCESS_TOKEN` exclusivo de scraping; não aceita a credencial master como substituta.
 - Todas as rotas `/api/v1/*` exigem uma credencial Bearer.
 - `API_ACCESS_TOKEN` continua sendo a credencial master, com acesso global e uso exclusivo administrativo.
 - Credenciais individuais `gik_...` são verificadas por hash SHA-256 em tempo constante e carregam escopos e IDs de integração permitidos.
@@ -28,6 +29,8 @@
 | Método | Caminho | Finalidade |
 |---|---|---|
 | GET | `/health` | Liveness público |
+| GET | `/readyz` | Readiness de PostgreSQL/Redis configurados |
+| GET | `/metrics` | Métricas Prometheus (token METRICS_ACCESS_TOKEN) |
 | POST | `/api/v1/integrations` | Criar integração inativa |
 | GET | `/api/v1/integrations` | Listar integrações ativas |
 | GET | `/api/v1/integrations/:integrationId` | Consultar integração |
@@ -107,7 +110,7 @@ Placeholders aceitos: {executionId}, {idempotencyKey} e {operationName}. O camin
 - GET /api/v1/executions/:executionId/events?limit=100: lista a trilha operacional.
 - GET /api/v1/observability/metrics?windowHours=24: devolve contagens de estados e eventos agregados.
 
-Todos esses endpoints exigem o mesmo Bearer token de serviço. Os eventos guardam apenas uma lista permitida de atributos operacionais; payload, segredos, headers e mensagens livres do provedor são omitidos.
+Os endpoints sob `/api/v1` exigem Bearer token com escopo adequado. Já `/metrics` usa exclusivamente `METRICS_ACCESS_TOKEN`. Os eventos guardam apenas uma lista permitida de atributos operacionais; payload, segredos, headers e mensagens livres do provedor são omitidos.
 
 ## Limitações antes de produção
 
@@ -140,10 +143,15 @@ A criação de clientes aceita `expiresInDays` (padrão 90), `rateLimitMax` (pad
 
 - `GET /api/v1/clients/:clientId/usage?days=30`: histórico de contagem diária por credencial, exclusivo da master; dias entre 1 e 30, retenção Redis de 35 dias.
 
-## Etapa 12 — Monitoramento avançado
+## Etapa 12/13 — Monitoramento avançado e centralizado
 
 - `GET /readyz`: readiness PostgreSQL/Redis, com status 200 ou 503.
 - `GET /api/v1/observability/performance?windowMinutes=5`: métricas HTTP e recursos do processo, janela entre 1 e 60 minutos.
 - `GET /api/v1/observability/alerts?windowMinutes=5`: alertas calculados por regras operacionais, janela entre 1 e 60 minutos.
 
 Os dois endpoints /observability exigem escopo global `observability:read`. Consulte `docs/monitoring-alerts.md` para configuração e limitações.
+
+
+- `GET /metrics`: exposition Prometheus 0.0.4, protegida por `METRICS_ACCESS_TOKEN` dedicado (não usa o token master).
+- O monitor de alertas envia notificações JSON para `ALERT_WEBHOOK_URL` quando configurado; consulte `docs/monitoring-alerts.md`.
+- `ALERT_WEBHOOK_URL`: inicia monitor periódico e notificações JSON `firing/resolved`; cooldown configurável.

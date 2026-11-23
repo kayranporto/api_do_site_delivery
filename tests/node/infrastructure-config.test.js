@@ -75,6 +75,7 @@ test('loadConfig valida token, porta, CORS, persistência e observabilidade', ()
     DATABASE_URL: 'postgresql://service:secret@localhost:5432/integrations',
     DATABASE_POOL_MAX: '15',
     NODE_ENV: 'production',
+    METRICS_ACCESS_TOKEN: 'metrics-production-token-with-at-least-thirty-two-characters',
     RATE_LIMIT_STORE: 'upstash',
     UPSTASH_REDIS_REST_URL: 'https://redis.example.test',
     UPSTASH_REDIS_REST_TOKEN: 'upstash-rest-token-with-sufficient-length'
@@ -102,4 +103,61 @@ test('loadConfig valida token, porta, CORS, persistência e observabilidade', ()
   assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_ERROR_RATE_PERCENT: '101' }), /ALERT_ERROR_RATE_PERCENT/);
   assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_429_RATE_PERCENT: '0' }), /ALERT_429_RATE_PERCENT/);
   assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_RSS_MB: '0' }), /ALERT_RSS_MB/);
+});
+
+test('loadConfig valida credencial Prometheus, webhook e agenda de notificações', () => {
+  const config = loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    METRICS_ACCESS_TOKEN: 'metrics-token-with-at-least-thirty-two-characters',
+    ALERT_WEBHOOK_URL: 'https://alerts.example.test/hook',
+    ALERT_WEBHOOK_TOKEN: 'webhook-token-with-sufficient-length',
+    ALERT_NOTIFICATION_INTERVAL_MS: '15000',
+    ALERT_NOTIFICATION_COOLDOWN_MS: '60000'
+  });
+  assert.equal(config.metricsAccessToken, 'metrics-token-with-at-least-thirty-two-characters');
+  assert.equal(config.alertWebhookUrl, 'https://alerts.example.test/hook');
+  assert.equal(config.alertWebhookToken, 'webhook-token-with-sufficient-length');
+  assert.equal(config.alertNotificationIntervalMs, 15000);
+  assert.equal(config.alertNotificationCooldownMs, 60000);
+
+  assert.throws(() => loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    METRICS_ACCESS_TOKEN: 'short'
+  }), /METRICS_ACCESS_TOKEN/);
+  assert.throws(() => loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    ALERT_WEBHOOK_TOKEN: 'webhook-token-with-sufficient-length'
+  }), /exige ALERT_WEBHOOK_URL/);
+  assert.throws(() => loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    ALERT_WEBHOOK_URL: 'https://alerts.example.test/hook',
+    ALERT_WEBHOOK_TOKEN: 'short'
+  }), /ALERT_WEBHOOK_TOKEN/);
+  assert.throws(() => loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    ALERT_NOTIFICATION_INTERVAL_MS: '1000'
+  }), /ALERT_NOTIFICATION_INTERVAL_MS/);
+  assert.throws(() => loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    ALERT_NOTIFICATION_COOLDOWN_MS: '5000'
+  }), /ALERT_NOTIFICATION_COOLDOWN_MS/);
+
+  assert.throws(() => loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://service:secret@localhost:5432/integrations',
+    RATE_LIMIT_STORE: 'upstash',
+    UPSTASH_REDIS_REST_URL: 'https://redis.example.test',
+    UPSTASH_REDIS_REST_TOKEN: 'upstash-rest-token-with-sufficient-length'
+  }), /METRICS_ACCESS_TOKEN/);
+  assert.throws(() => loadConfig({
+    API_ACCESS_TOKEN: TOKEN,
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://service:secret@localhost:5432/integrations',
+    RATE_LIMIT_STORE: 'upstash',
+    UPSTASH_REDIS_REST_URL: 'https://redis.example.test',
+    UPSTASH_REDIS_REST_TOKEN: 'upstash-rest-token-with-sufficient-length',
+    METRICS_ACCESS_TOKEN: 'metrics-token-with-at-least-thirty-two-characters',
+    ALERT_WEBHOOK_URL: 'http://alerts.example.test/hook'
+  }), /ALERT_WEBHOOK_URL/);
 });
