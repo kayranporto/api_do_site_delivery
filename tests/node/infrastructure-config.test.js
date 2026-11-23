@@ -4,7 +4,7 @@ import { loadConfig } from '../../src/infrastructure/configuration/loadConfig.js
 
 const TOKEN = 'this-is-a-random-test-token-that-is-long-enough';
 
-test('loadConfig valida token, porta, CORS e configurações de persistência', () => {
+test('loadConfig valida token, porta, CORS, persistência e observabilidade', () => {
   const config = loadConfig({
     API_ACCESS_TOKEN: TOKEN,
     HOST: '127.0.0.1',
@@ -19,6 +19,12 @@ test('loadConfig valida token, porta, CORS e configurações de persistência', 
   assert.equal(config.databasePoolMax, 10);
   assert.equal(config.nodeEnv, 'development');
   assert.equal(config.rateLimitStore, 'memory');
+  assert.equal(config.observabilityWindowMinutes, 5);
+  assert.equal(config.alertMinRequests, 20);
+  assert.equal(config.alertP95LatencyMs, 1000);
+  assert.equal(config.alertErrorRatePercent, 5);
+  assert.equal(config.alert429RatePercent, 20);
+  assert.equal(config.alertRssMb, 512);
   assert.equal(config.workerIntervalMs, 5000);
   assert.equal(config.workerBatchSize, 20);
   assert.equal(config.workerStaleAfterMs, 300000);
@@ -89,4 +95,11 @@ test('loadConfig valida token, porta, CORS e configurações de persistência', 
     UPSTASH_REDIS_REST_URL: 'http://redis.example.test',
     UPSTASH_REDIS_REST_TOKEN: 'upstash-rest-token-with-sufficient-length'
   }), /HTTPS em produção/);
+
+  assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, OBSERVABILITY_WINDOW_MINUTES: '61' }), /OBSERVABILITY_WINDOW_MINUTES/);
+  assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_MIN_REQUESTS: '0' }), /ALERT_MIN_REQUESTS/);
+  assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_P95_LATENCY_MS: '70000' }), /ALERT_P95_LATENCY_MS/);
+  assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_ERROR_RATE_PERCENT: '101' }), /ALERT_ERROR_RATE_PERCENT/);
+  assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_429_RATE_PERCENT: '0' }), /ALERT_429_RATE_PERCENT/);
+  assert.throws(() => loadConfig({ API_ACCESS_TOKEN: TOKEN, ALERT_RSS_MB: '0' }), /ALERT_RSS_MB/);
 });

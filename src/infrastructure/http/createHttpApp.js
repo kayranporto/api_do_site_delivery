@@ -5,6 +5,8 @@ import { requestContext } from './middleware/requestContext.js';
 import { apiKeyAuth } from './middleware/apiKeyAuth.js';
 import { createRateLimiter } from './middleware/rateLimit.js';
 import { createInMemoryRateLimitStore } from '../rate-limits/InMemoryRateLimitStore.js';
+import { HttpMetrics } from '../observability/HttpMetrics.js';
+import { OperationalAlertEvaluator } from '../observability/OperationalAlertEvaluator.js';
 import { recordApiClientAuthentication } from './middleware/recordApiClientAuthentication.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createV1Router } from './routes/v1.js';
@@ -15,6 +17,11 @@ export function createHttpApp({
   apiClientRepository,
   executionRepository,
   rateLimitStore,
+  httpMetrics,
+  alertEvaluator,
+  alertThresholds,
+  readinessChecks = {},
+  observabilityWindowMinutes = 5,
   corsOrigins = [],
   jsonLimit = '64kb',
   rateLimitWindowMs = 60_000,
@@ -36,16 +43,41 @@ export function createHttpApp({
   })) {
     throw new TypeError('corsOrigins deve conter origens HTTP(S) exatas; wildcard não é permitido.');
   }
+  if (!readinessChecks || typeof readinessChecks !== 'object' || Array.isArray(readinessChecks)) {
+    throw new TypeError('readinessChecks deve ser um objeto de verificações.');
+  }
+  for (const [name, check] of Object.entries(readinessChecks)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(name) || typeof check !== 'function') {
+      throw new TypeError('Cada readiness check deve ter um nome válido e ser uma função.');
+    }
+  }
+  if (!Number.isInteger(observabilityWindowMinutes) || observabilityWindowMinutes < 1 || observabilityWindowMinutes > 60) {
+    throw new RangeError('observabilityWindowMinutes deve estar entre 1 e 60.');
+  }
 
   const activeRateLimitStore = rateLimitStore ?? createInMemoryRateLimitStore();
   if (typeof activeRateLimitStore.consume !== 'function'
     || typeof activeRateLimitStore.getClientUsage !== 'function') {
     throw new TypeError('rateLimitStore deve implementar consume() e getClientUsage().');
   }
+  const activeHttpMetrics = httpMetrics ?? new HttpMetrics();
+  if (typeof activeHttpMetrics.middleware !== 'function' || typeof activeHttpMetrics.snapshot !== 'function') {
+    throw new TypeError('httpMetrics deve implementar middleware() e snapshot().');
+  }
+  const activeAlertEvaluator = alertEvaluator ?? new OperationalAlertEvaluator(alertThresholds);
+  if (typeof activeAlertEvaluator.evaluate !== 'function') {
+    throw new TypeError('alertEvaluator deve implementar evaluate().');
+  }
+
+  const checks = { ...readinessChecks };
+  if (!checks.rateLimitStore && typeof activeRateLimitStore.ping === 'function') {
+    checks.rateLimitStore = () => activeRateLimitStore.ping();
+  }
 
   const app = express();
   app.disable('x-powered-by');
   app.use(requestContext);
+  app.use(activeHttpMetrics.middleware());
   app.use(helmet());
   app.use(cors({
     origin(origin, callback) {
@@ -58,6 +90,21 @@ export function createHttpApp({
     maxAge: 600
   }));
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+  app.get('/readyz', async (_req, res) => {
+    const results = await Promise.all(Object.entries(checks).map(async ([name, check]) => {
+      try {
+        const result = await check();
+        return [name, result === false ? 'unavailable' : 'ok'];
+      } catch {
+        return [name, 'unavailable'];
+      }
+    }));
+    const status = results.every(([, result]) => result === 'ok') ? 'ready' : 'not_ready';
+    return res.status(status === 'ready' ? 200 : 503).json({
+      status,
+      checks: Object.fromEntries(results)
+    });
+  });
 
   // Limite compartilhado por IP antes da autenticação para reduzir abuso anônimo.
   app.use('/api/v1', createRateLimiter({
@@ -81,7 +128,10 @@ export function createHttpApp({
     useCases,
     apiClientRepository,
     executionRepository,
-    rateLimitStore: activeRateLimitStore
+    rateLimitStore: activeRateLimitStore,
+    httpMetrics: activeHttpMetrics,
+    alertEvaluator: activeAlertEvaluator,
+    observabilityWindowMinutes
   }));
   app.use((_req, res) => res.status(404).json({
     error: { code: 'ROUTE_NOT_FOUND', message: 'Rota não encontrada.', requestId: res.getHeader('x-request-id') }

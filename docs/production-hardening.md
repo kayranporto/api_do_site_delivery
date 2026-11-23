@@ -20,10 +20,20 @@ O workflow .github/workflows/ci.yml executa npm ci e npm test em push para main 
 
 A tabela execution_events é append-only pela aplicação. A política de retenção depende de requisitos legais, contratuais e de auditoria da implantação. Antes de habilitar expurgo, defina prazo, aprovação, backup e trilha de auditoria. Não foi criada rotina de exclusão automática nesta etapa.
 
+## Monitoramento e alertas — Etapa 12
+
+O middleware coleta métricas HTTP concluídas por instância: volume, status 4xx/5xx/429, latência média, p50, p95 e máxima, distribuição pelas rotas Express, uso de memória RSS/heap e estimativa de CPU do processo. O buffer é limitado a 10.000 amostras. Os nomes de rota são templates do Express; requisições sem rota usam o rótulo `_unmatched`, sem armazenar path, query, payload, IP, headers ou credenciais.
+
+`GET /readyz` executa checks configurados para PostgreSQL (`SELECT 1`) e Redis (`PING`), devolvendo 503 sem detalhes de exceção quando uma dependência está indisponível. `/health` permanece como liveness do processo e não verifica dependências.
+
+`GET /api/v1/observability/performance?windowMinutes=5` expõe métricas de 1 a 60 minutos. `GET /api/v1/observability/alerts?windowMinutes=5` avalia limites de p95, proporção de 5xx, proporção de 429 e RSS. Ambos exigem escopo global `observability:read`. Os limites podem ser ajustados pelas variáveis ALERT_* e pela janela padrão OBSERVABILITY_WINDOW_MINUTES.
+
+Os dados são efêmeros e locais ao processo: cada réplica tem seu próprio buffer e reiniciar a aplicação remove as amostras. Os alertas são regras avaliadas sob demanda e devolvidas como JSON; não há envio de notificações ou estado persistente de incidentes. Para monitoramento multi-instância, retenção e acionamento, encaminhe métricas para Prometheus/OpenTelemetry ou um serviço central e integre um canal de alertas externo.
+
 ## Limitações remanescentes
 
 - A telemetria de consumo do Upstash tem retenção de 35 dias e não é um livro contábil nem uma fonte de faturamento.
 - A credencial master permanece global e deve ser mantida fora das aplicações consumidoras; chaves individuais têm escopos e allowlists de integração.
 - /health é uma verificação de processo, não uma prova de prontidão do banco, do worker ou do Redis.
-- Não há alertas, dashboard, métricas Prometheus, SIEM ou política automática de retenção para eventos operacionais.
+- Não há notificações de alerta, dashboard, exportação Prometheus/OpenTelemetry, SIEM ou política automática de retenção para eventos operacionais.
 - A implantação ainda precisa de TLS, firewall/egress, gestão/rotação de segredos, backup PostgreSQL e monitoramento externo.

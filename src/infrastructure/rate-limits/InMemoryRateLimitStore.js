@@ -16,6 +16,10 @@ export class InMemoryRateLimitStore {
     this.usage = new Map();
   }
 
+  async ping() {
+    return true;
+  }
+
   async consume({ key, windowMs, now = Date.now(), usageClientId = null }) {
     if (typeof key !== 'string' || !key) throw new TypeError('Chave de rate limit inválida.');
     if (!Number.isInteger(windowMs) || windowMs < 1_000 || windowMs > 3_600_000) {

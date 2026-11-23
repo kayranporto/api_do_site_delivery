@@ -4,9 +4,9 @@ API independente para orquestrar operações com serviços externos, usando Node
 
 ## Estado
 
-Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial), 9 (Credenciais e autorização), 10 (Ciclo de vida e quotas de credenciais) e 11 (Rate limiting distribuído e consumo por cliente) implementadas.
+Etapas 1 (Domain), 2 (Application), 3 (Infrastructure), 4 (Interface HTTP), 5 (Persistência PostgreSQL), 6 (Worker), 7 (Reconciliação e observabilidade), 8 (Endurecimento operacional inicial), 9 (Credenciais e autorização), 10 (Ciclo de vida e quotas de credenciais) 11 (Rate limiting distribuído e consumo por cliente) e 12 (Monitoramento, métricas HTTP e alertas operacionais) implementadas.
 
-O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, concluir hardening operacional e definir alertas e controles do ambiente.
+O projeto ainda **não está pronto para produção**: a implantação precisa configurar e validar os serviços gerenciados, executar migrations explicitamente, calibrar os limites de alerta por ambiente e integrar notificações externas/monitoramento centralizado.
 
 ## Instalação e execução
 
@@ -39,6 +39,17 @@ O limite geral por IP continua antes da autenticação. Depois da autenticação
 
 As chamadas autenticadas por credencial individual geram contagens diárias no Redis, retidas por 35 dias. A master consulta **GET /api/v1/clients/:clientId/usage?days=30** para visualizar até 30 dias de consumo. Isso é telemetria de requisições, não faturamento nem quota mensal. Consulte docs/rate-limiting-usage.md e docs/production-hardening.md.
 
+## Monitoramento e alertas
+
+- **GET /health**: liveness do processo.
+- **GET /readyz**: readiness dos serviços configurados; verifica PostgreSQL e Redis com consultas/ping reais e devolve 503 quando algum estiver indisponível.
+- **GET /api/v1/observability/performance?windowMinutes=5**: contagem HTTP, status, taxa 5xx/429, latência média/p50/p95/máxima, rotas, uso de memória e CPU do processo.
+- **GET /api/v1/observability/alerts?windowMinutes=5**: avalia regras configuráveis de p95, erro 5xx, respostas 429 e RSS.
+
+Os endpoints de observabilidade exigem escopo global `observability:read`; chaves restritas por integração não podem consultar agregados globais. As métricas HTTP são locais à instância, guardam no máximo 10.000 amostras recentes, usam templates de rota (não IDs, IPs, payloads ou query strings) e são perdidas ao reiniciar. Alertas são avaliações JSON na API; não enviam e-mail, Slack, webhook ou SMS. Consulte docs/monitoring-alerts.md.
+
+As variáveis `OBSERVABILITY_WINDOW_MINUTES`, `ALERT_MIN_REQUESTS`, `ALERT_P95_LATENCY_MS`, `ALERT_ERROR_RATE_PERCENT`, `ALERT_429_RATE_PERCENT` e `ALERT_RSS_MB` controlam a janela padrão e os limites.
+
 ## Credenciais de cliente
 
 Use a credencial master para criar chaves individuais em **POST /api/v1/clients**. A chave bruta é exibida somente na criação e na rotação; o banco mantém apenas o hash. Por padrão, uma nova chave expira em 90 dias. Configure **expiresInDays**, **rateLimitMax** e **rateLimitWindowMs** no corpo da criação. Use **POST /api/v1/clients/:clientId/rotate** para trocar a chave (a anterior é invalidada imediatamente), **POST /api/v1/clients/:clientId/limits** para ajustar quotas, **POST /api/v1/clients/:clientId/revoke** para revogar, **GET /api/v1/clients/:clientId/audit** para consultar eventos e **GET /api/v1/clients/:clientId/usage** para consultar consumo diário. Consulte docs/authentication-authorization.md.
@@ -53,11 +64,11 @@ Execute **npm test** para Jest e testes Node.js. O workflow do GitHub Actions ex
 
 - src/domain: entidades, Value Objects, erros e portas.
 - src/application: casos de uso e contratos de saída.
-- src/infrastructure: repositórios em memória e PostgreSQL, provedores, rate limiting e adaptadores HTTP.
+- src/infrastructure: repositórios em memória e PostgreSQL, provedores, rate limiting, observabilidade HTTP e adaptadores.
 - database/migrations: schema versionado do PostgreSQL.
 - src/bootstrap: composição de dependências.
 - src/server.js: inicialização do servidor Express.
 - tests: testes Node.js e Jest.
 - docs: decisões das camadas, contrato HTTP, persistência e operação.
 
-Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md, docs/rate-limiting-usage.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.
+Consulte docs/http-api.md, docs/persistence-design.md, docs/reconciliation-observability.md, docs/production-hardening.md, docs/rate-limiting-usage.md, docs/monitoring-alerts.md e docs/authentication-authorization.md para rotas, exemplos e limites operacionais.

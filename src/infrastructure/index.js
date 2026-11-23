@@ -17,3 +17,7 @@ export { RandomApiKeyGenerator, hashApiKey } from './security/RandomApiKeyGenera
 
 export { InMemoryOperationalEventRepository } from './repositories/InMemoryOperationalEventRepository.js';
 export { PostgresOperationalEventRepository } from './repositories/PostgresOperationalEventRepository.js';
+export { HttpMetrics } from './observability/HttpMetrics.js';
+export { OperationalAlertEvaluator } from './observability/OperationalAlertEvaluator.js';
+export { InMemoryRateLimitStore, createInMemoryRateLimitStore } from './rate-limits/InMemoryRateLimitStore.js';
+export { UpstashRedisRateLimitStore } from './rate-limits/UpstashRedisRateLimitStore.js';

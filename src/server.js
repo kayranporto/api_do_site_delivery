@@ -10,6 +10,7 @@ import { UpstashRedisRateLimitStore } from './infrastructure/rate-limits/Upstash
 export async function buildHttpApplication({ config = loadConfig(), container } = {}) {
   let activeContainer = container;
   let closePersistence = async () => {};
+  const readinessChecks = {};
 
   if (!activeContainer) {
     let repositories;
@@ -19,6 +20,10 @@ export async function buildHttpApplication({ config = loadConfig(), container } 
         max: config.databasePoolMax
       });
       repositories = persistence.repositories;
+      readinessChecks.postgres = async () => {
+        await persistence.pool.query('SELECT 1');
+        return true;
+      };
       closePersistence = persistence.close;
     } else if (config.nodeEnv === 'production') {
       throw new Error('Persistência PostgreSQL é obrigatória em produção.');
@@ -45,6 +50,15 @@ export async function buildHttpApplication({ config = loadConfig(), container } 
     apiClientRepository: activeContainer.repositories.apiClientRepository,
     executionRepository: activeContainer.repositories.executionRepository,
     rateLimitStore,
+    readinessChecks,
+    alertThresholds: {
+      minRequests: config.alertMinRequests,
+      p95LatencyMs: config.alertP95LatencyMs,
+      errorRatePercent: config.alertErrorRatePercent,
+      rateLimitRatePercent: config.alert429RatePercent,
+      rssMb: config.alertRssMb
+    },
+    observabilityWindowMinutes: config.observabilityWindowMinutes,
     corsOrigins: config.corsOrigins,
     rateLimitWindowMs: config.rateLimitWindowMs,
     rateLimitMax: config.rateLimitMax

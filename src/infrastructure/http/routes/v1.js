@@ -88,7 +88,31 @@ function apiClientResource(client) {
   };
 }
 
-export function createV1Router({ useCases, apiClientRepository, executionRepository, rateLimitStore }) {
+function parseWindowMinutes(req, res, defaultWindow) {
+  const rawWindow = req.query.windowMinutes;
+  const windowMinutes = rawWindow === undefined ? defaultWindow : Number(rawWindow);
+  if (!Number.isInteger(windowMinutes) || windowMinutes < 1 || windowMinutes > 60) {
+    res.status(400).json({
+      error: {
+        code: 'INVALID_PERFORMANCE_WINDOW',
+        message: 'windowMinutes deve ser um inteiro entre 1 e 60.',
+        requestId: req.requestId
+      }
+    });
+    return null;
+  }
+  return windowMinutes;
+}
+
+export function createV1Router({
+  useCases,
+  apiClientRepository,
+  executionRepository,
+  rateLimitStore,
+  httpMetrics,
+  alertEvaluator,
+  observabilityWindowMinutes = 5
+}) {
   const router = Router();
   const executionAccess = requireExecutionAccess(executionRepository);
 
@@ -286,6 +310,19 @@ export function createV1Router({ useCases, apiClientRepository, executionReposit
     }
     const metrics = await useCases.getOperationalMetrics.execute({ windowHours });
     return res.json({ data: metrics });
+  });
+
+  router.get('/observability/performance', requireGlobalScope('observability:read'), (req, res) => {
+    const windowMinutes = parseWindowMinutes(req, res, observabilityWindowMinutes);
+    if (windowMinutes === null) return undefined;
+    return res.json({ data: httpMetrics.snapshot({ windowMinutes }) });
+  });
+
+  router.get('/observability/alerts', requireGlobalScope('observability:read'), (req, res) => {
+    const windowMinutes = parseWindowMinutes(req, res, observabilityWindowMinutes);
+    if (windowMinutes === null) return undefined;
+    const performance = httpMetrics.snapshot({ windowMinutes });
+    return res.json({ data: alertEvaluator.evaluate(performance) });
   });
 
   router.get('/executions/:executionId/events',

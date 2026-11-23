@@ -134,3 +134,16 @@ A credencial individual precisa ter o escopo adequado para cada rota. O campo `i
 
 
 A criação de clientes aceita `expiresInDays` (padrão 90), `rateLimitMax` (padrão 120) e `rateLimitWindowMs` (padrão 60000). A rotação aceita `expiresInDays` para renovar a validade. A rota `/limits` permite alterar `rateLimitMax` e/ou `rateLimitWindowMs` sem trocar a chave. A quota é por cliente e permanece contínua após a rotação da chave. A chave nova é retornada somente na resposta de rotação.
+
+
+## Etapa 11 — Consumo e quotas
+
+- `GET /api/v1/clients/:clientId/usage?days=30`: histórico de contagem diária por credencial, exclusivo da master; dias entre 1 e 30, retenção Redis de 35 dias.
+
+## Etapa 12 — Monitoramento avançado
+
+- `GET /readyz`: readiness PostgreSQL/Redis, com status 200 ou 503.
+- `GET /api/v1/observability/performance?windowMinutes=5`: métricas HTTP e recursos do processo, janela entre 1 e 60 minutos.
+- `GET /api/v1/observability/alerts?windowMinutes=5`: alertas calculados por regras operacionais, janela entre 1 e 60 minutos.
+
+Os dois endpoints /observability exigem escopo global `observability:read`. Consulte `docs/monitoring-alerts.md` para configuração e limitações.

@@ -50,6 +50,12 @@ export class UpstashRedisRateLimitStore {
     this.namespace = namespace;
   }
 
+  async ping() {
+    const result = await this.command(['PING']);
+    if (result !== 'PONG') throw new Error('O Redis compartilhado não confirmou o PING.');
+    return true;
+  }
+
   async consume({ key, windowMs, now = Date.now(), usageClientId = null }) {
     if (typeof key !== 'string' || !key) throw new TypeError('Chave de rate limit inválida.');
     if (!Number.isInteger(windowMs) || windowMs < 1_000 || windowMs > 3_600_000) {
