@@ -12,6 +12,12 @@ class IntegrationRepositoryFake {
 class ExecutionRepositoryFake {
   items = new Map();
   async save(execution) { this.items.set(execution.id, execution); }
+  async createIfAbsent(execution) {
+    const existing = await this.findByIdempotencyKey(execution.integrationId, execution.idempotencyKey?.value);
+    if (existing) return { created: false, execution: existing };
+    this.items.set(execution.id, execution);
+    return { created: true, execution };
+  }
   async findByIdempotencyKey(integrationId, key) {
     return [...this.items.values()].find((item) => item.integrationId === integrationId
       && item.idempotencyKey?.value === key) ?? null;

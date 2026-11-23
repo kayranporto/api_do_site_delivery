@@ -11,6 +11,8 @@ function makeApp() {
   const app = createHttpApp({
     useCases: container.useCases,
     apiAccessToken: API_TOKEN,
+    apiClientRepository: container.repositories.apiClientRepository,
+    executionRepository: container.repositories.executionRepository,
     corsOrigins: ['https://client.example.test']
   });
   return { app, container };
@@ -92,7 +94,9 @@ describe('HTTP API', () => {
     const result = await auth(request(app).post(`/api/v1/integrations/${integrationId}/operations`))
       .set('Idempotency-Key', 'http-operation-12345678')
       .send({ operationName: 'records.create', payload: { name: 'Example' } })
-      .expect(201);
+      .expect((response) => {
+        if (response.status !== 201) throw new Error('Operation request failed: ' + JSON.stringify(response.body));
+      });
 
     expect(result.body.data.status).toBe('succeeded');
     expect(result.body.meta.result).toEqual({ externalId: 'external-123' });
