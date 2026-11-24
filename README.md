@@ -103,3 +103,7 @@ A rotina `npm run verify:backup` demonstra backup em formato custom do PostgreSQ
 A atualização de `dotenv` para 18.0.10 foi incorporada. A auditoria npm de produção está limpa no limite moderado; permanecem 18 alertas moderados em ferramentas de desenvolvimento ligadas ao Jest, documentados sem forçar overrides de major potencialmente incompatíveis.
 
 A conclusão técnica desta etapa não configura backup real, PITR, restauração real, domínio, TLS ou deploy. Esses itens continuam dependentes da infraestrutura escolhida.
+
+## Implantação no Render — Etapa 19
+
+A configuração inicial de hospedagem está em `render.yaml` e `docs/render-deployment.md`. Ela descreve dois serviços (API e worker), deixa PostgreSQL e Upstash como dependências externas a configurar e exige revisão de custos/segredos antes de criar recursos. O Blueprint não foi sincronizado e nenhum deploy foi realizado.

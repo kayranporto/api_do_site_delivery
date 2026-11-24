@@ -95,3 +95,15 @@ test('webhook HTTPS não aceita credenciais, query string ou fragmento na URL', 
     );
   }
 });
+
+test('CLIENT_IP_HEADER aceita somente o cabeçalho dedicado do Cloudflare usado no Render', () => {
+  assert.equal(
+    loadConfig({ ...PRODUCTION_ENV, CLIENT_IP_HEADER: 'CF-Connecting-IP' }).clientIpHeader,
+    'cf-connecting-ip'
+  );
+  assert.equal(loadConfig({ ...PRODUCTION_ENV }).clientIpHeader, null);
+  assert.throws(
+    () => loadConfig({ ...PRODUCTION_ENV, CLIENT_IP_HEADER: 'X-Forwarded-For' }),
+    /CLIENT_IP_HEADER aceita somente CF-Connecting-IP/
+  );
+});

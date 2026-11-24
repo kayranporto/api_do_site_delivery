@@ -66,6 +66,13 @@ function parseUpstashUrl(value, nodeEnv) {
   }
   return parsed.toString().replace(/\/$/, '');
 }
+function parseClientIpHeader(value) {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return null;
+  if (typeof value !== 'string' || value.trim().toLowerCase() !== 'cf-connecting-ip') {
+    throw new Error('CLIENT_IP_HEADER aceita somente CF-Connecting-IP; não use cabeçalhos encaminhados controláveis pelo cliente.');
+  }
+  return 'cf-connecting-ip';
+}
 function parseWebhookUrl(value) {
   if (value == null || (typeof value === 'string' && value.trim() === '')) return null;
   if (typeof value !== 'string') throw new Error('ALERT_WEBHOOK_URL deve ser uma URL HTTPS válida.');
@@ -97,6 +104,7 @@ export function loadConfig(environment = process.env) {
       throw new Error('CORS_ORIGINS deve usar HTTPS em produção.');
     }
   }
+  const clientIpHeader = parseClientIpHeader(environment.CLIENT_IP_HEADER);
   const databaseUrl = parseDatabaseUrl(environment.DATABASE_URL);
   if (nodeEnv === 'production' && !databaseUrl) throw new Error('DATABASE_URL é obrigatório em NODE_ENV=production.');
 
@@ -138,6 +146,7 @@ export function loadConfig(environment = process.env) {
 
   return {
     host: environment.HOST ?? '127.0.0.1',
+    clientIpHeader,
     port: parsePort(environment.PORT),
     apiAccessToken,
     corsOrigins,

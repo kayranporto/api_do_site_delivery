@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -15,6 +16,15 @@ import { renderPrometheusMetrics } from '../observability/PrometheusMetricsExpor
 import { recordApiClientAuthentication } from './middleware/recordApiClientAuthentication.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createV1Router } from './routes/v1.js';
+
+function resolveRateLimitClientIp(req, clientIpHeader) {
+  if (!clientIpHeader) return typeof req.ip === 'string' && req.ip ? req.ip : 'unknown';
+  const candidate = req.get(clientIpHeader);
+  if (typeof candidate !== 'string' || candidate.includes(',') || isIP(candidate.trim()) === 0) {
+    throw new Error('Cabeçalho de IP confiável ausente ou inválido para rate limiting.');
+  }
+  return candidate.trim();
+}
 
 function matchesBearerToken(req, expected) {
   const match = /^Bearer ([^\s]+)$/i.exec(req.get('authorization') ?? '');
@@ -43,8 +53,12 @@ export function createHttpApp({
   corsOrigins = [],
   jsonLimit = '64kb',
   rateLimitWindowMs = 60_000,
-  rateLimitMax = 120
+  rateLimitMax = 120,
+  clientIpHeader = null
 }) {
+  if (clientIpHeader !== null && clientIpHeader !== 'cf-connecting-ip') {
+    throw new TypeError('clientIpHeader deve ser cf-connecting-ip ou null.');
+  }
   if (!useCases || typeof useCases !== 'object') {
     throw new TypeError('useCases é obrigatório para compor a API HTTP.');
   }
@@ -181,6 +195,7 @@ export function createHttpApp({
   app.use('/api/v1', createRateLimiter({
     windowMs: rateLimitWindowMs,
     maxRequests: rateLimitMax,
+    keyResolver: (req) => resolveRateLimitClientIp(req, clientIpHeader),
     rateLimitStore: activeRateLimitStore
   }));
   app.use('/api/v1', apiKeyAuth({ token: apiAccessToken, apiClientRepository }));

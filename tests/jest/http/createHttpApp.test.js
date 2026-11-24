@@ -50,6 +50,35 @@ describe('HTTP API', () => {
     expect(response.headers['x-powered-by']).toBeUndefined();
   });
 
+  test('Render usa CF-Connecting-IP validado no rate limit sem confiar em X-Forwarded-For', async () => {
+    const container = createContainer({ environment: {} });
+    const app = createHttpApp({
+      useCases: container.useCases,
+      apiAccessToken: API_TOKEN,
+      apiClientRepository: container.repositories.apiClientRepository,
+      executionRepository: container.repositories.executionRepository,
+      clientIpHeader: 'cf-connecting-ip',
+      rateLimitMax: 1
+    });
+    expect(app.get('trust proxy')).toBe(false);
+
+    await auth(request(app).get('/api/v1/integrations'))
+      .set('CF-Connecting-IP', '198.51.100.10')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .expect(200);
+
+    await auth(request(app).get('/api/v1/integrations'))
+      .set('CF-Connecting-IP', '198.51.100.10')
+      .set('X-Forwarded-For', '192.0.2.200')
+      .expect(429);
+
+    await auth(request(app).get('/api/v1/integrations'))
+      .set('CF-Connecting-IP', '198.51.100.11')
+      .expect(200);
+
+    await auth(request(app).get('/api/v1/integrations')).expect(500);
+  });
+
   test('rotas da API exigem token Bearer', async () => {
     const response = await request(app).get('/api/v1/integrations').expect(401);
     expect(response.body.error.code).toBe('UNAUTHORIZED');

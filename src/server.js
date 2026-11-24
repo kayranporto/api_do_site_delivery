@@ -54,6 +54,7 @@ export async function buildHttpApplication({ config = loadConfig(), container } 
   const app = createHttpApp({
     useCases: activeContainer.useCases,
     apiAccessToken: config.apiAccessToken,
+    clientIpHeader: config.clientIpHeader,
     apiClientRepository: activeContainer.repositories.apiClientRepository,
     executionRepository: activeContainer.repositories.executionRepository,
     rateLimitStore,

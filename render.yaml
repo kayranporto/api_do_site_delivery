@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: integration-api
+    runtime: node
+    region: virginia
+    plan: 0.5c-512mb
+    buildCommand: npm ci
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /readyz
+    maxShutdownDelaySeconds: 60
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: CLIENT_IP_HEADER
+        value: cf-connecting-ip
+      - key: CORS_ORIGINS
+        value: ""
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_POOL_MAX
+        value: "10"
+      - key: RATE_LIMIT_STORE
+        value: upstash
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: API_ACCESS_TOKEN
+        generateValue: true
+      - key: METRICS_ACCESS_TOKEN
+        generateValue: true
+
+  - type: worker
+    name: integration-api-worker
+    runtime: node
+    region: virginia
+    plan: 0.5c-512mb
+    buildCommand: npm ci
+    preDeployCommand: npm run db:migrate
+    startCommand: npm run worker
+    maxShutdownDelaySeconds: 180
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromService:
+          name: integration-api
+          type: web
+          envVarKey: DATABASE_URL
+      - key: DATABASE_POOL_MAX
+        value: "10"
+      - key: WORKER_INTERVAL_MS
+        value: "5000"
+      - key: WORKER_BATCH_SIZE
+        value: "20"
+      - key: WORKER_STALE_BATCH_SIZE
+        value: "50"
+      - key: WORKER_STALE_AFTER_MS
+        value: "300000"
+      - key: WORKER_LEASE_MS
+        value: "180000"

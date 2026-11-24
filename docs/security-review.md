@@ -7,7 +7,7 @@
 - Em produção, origens CORS configuradas precisam usar HTTPS.
 - URLs de webhook usam HTTPS e não podem incluir credenciais, query string ou fragmento. O segredo, quando necessário, deve ser enviado no header Authorization.
 - Todas as respostas de `/api/v1`, inclusive erros de autenticação, recebem `Cache-Control: no-store`; respostas de criação/rotação de chave não devem ser armazenadas por caches intermediários.
-- `trust proxy` permanece explicitamente desativado. Cabeçalhos `X-Forwarded-For` fornecidos por clientes não são considerados origem confiável para rate limiting.
+- `trust proxy` permanece explicitamente desativado. No Render, o rate limiter pode usar somente `CF-Connecting-IP`, validado como um único IPv4/IPv6; `X-Forwarded-For` continua sem confiança.
 - O CI usa actions fixadas por SHA imutável com runtime Node 24, não persiste credenciais do checkout, testa Node.js 22, 24 e 26, executa auditoria npm geral e uma auditoria mais rígida apenas das dependências de produção.
 - Dependabot verifica semanalmente atualizações de dependências npm e GitHub Actions.
 
@@ -16,7 +16,7 @@
 1. **Runtime:** usar uma linha LTS suportada; não usar Node.js 20 ou anterior.
 2. **Segredos:** gerar valores aleatórios próprios para `API_ACCESS_TOKEN`, `METRICS_ACCESS_TOKEN`, `UPSTASH_REDIS_REST_TOKEN` e `ALERT_WEBHOOK_TOKEN`, sempre distintos, guardados no gerenciador de segredos do provedor. Nunca versionar `.env`.
 3. **Ambiente:** definir `NODE_ENV=production`, `DATABASE_URL`, `RATE_LIMIT_STORE=upstash`, as credenciais Redis e `METRICS_ACCESS_TOKEN`. A inicialização falha quando os requisitos obrigatórios estão ausentes.
-4. **Rede:** terminar TLS em um proxy confiável; restringir `/admin`, rotas administrativas e `/metrics` por VPN/allowlist/rede privada quando possível. Não habilitar `trust proxy` sem uma configuração explícita dos proxies confiáveis e testes de IP.
+4. **Rede:** terminar TLS no proxy da hospedagem; no Render, definir `CLIENT_IP_HEADER=cf-connecting-ip` e validar o IP de origem com testes. Manter `trust proxy` desativado; restringir `/admin`, rotas administrativas e `/metrics` por VPN/allowlist/rede privada quando possível.
 5. **Banco:** usar usuário PostgreSQL com privilégio mínimo, conexão TLS conforme o provedor, backups automáticos e teste documentado de restauração. Aplicar migrations em procedimento controlado antes de iniciar a versão nova.
 6. **Redis:** usar endpoint HTTPS, segredo próprio, política de acesso restrita e alertas de indisponibilidade.
 7. **Provedores e webhook:** permitir egress somente aos hosts aprovados; usar segredos via cofre/variáveis `env:`; não usar URLs de webhook controladas por consumidores da API.
@@ -27,7 +27,7 @@
 
 - A configuração não cria nem provisiona banco, Redis, WAF, VPN, TLS, DNS, backups, Prometheus ou o cofre de segredos.
 - A política de TLS do PostgreSQL e a identidade do proxy dependem do serviço de hospedagem e precisam ser conferidas no ambiente real.
-- `trust proxy` está desligado de propósito. Atrás de proxy, a origem vista pelo rate limiter pode ser o próprio proxy até que uma política confiável seja definida.
+- `trust proxy` fica desligado de propósito. Para Render, `CLIENT_IP_HEADER=cf-connecting-ip` permite usar o cabeçalho dedicado fornecido pela camada Cloudflare; se esse cabeçalho estiver ausente ou inválido, o rate limiter falha fechado. Em outras hospedagens, mantenha o padrão até validar a cadeia de proxy.
 - Auditoria de credenciais e histórico de alertas exigem retenção/centralização operacional; buffers em memória não são evidência durável.
 - A proteção de branch, exigência de revisão por PR e configurações da conta GitHub não foram alteradas. A integração GitHub disponível não autorizou a leitura das regras de proteção do branch.
 - A auditoria npm desta revisão reportou 18 alertas moderados em dependências de desenvolvimento transitivas do Jest (cadeia `glob`/`minimatch`); não houve alerta de alta ou crítica gravidade no limite aplicado. O CI também passa a exigir ausência de alertas moderados ou superiores nas dependências de produção. Os alertas de desenvolvimento permanecem registrados para atualização via Dependabot.
