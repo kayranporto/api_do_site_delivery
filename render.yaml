@@ -20,7 +20,9 @@ services:
       - key: CORS_ORIGINS
         value: ""
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: integration-api-db
+          property: connectionString
       - key: DATABASE_POOL_MAX
         value: "10"
       - key: RATE_LIMIT_STORE
@@ -48,10 +50,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromService:
-          name: integration-api
-          type: web
-          envVarKey: DATABASE_URL
+        fromDatabase:
+          name: integration-api-db
+          property: connectionString
       - key: DATABASE_POOL_MAX
         value: "10"
       - key: WORKER_INTERVAL_MS
@@ -64,3 +65,12 @@ services:
         value: "300000"
       - key: WORKER_LEASE_MS
         value: "180000"
+
+databases:
+  - name: integration-api-db
+    databaseName: integration_api
+    user: integration_api_user
+    region: virginia
+    plan: 0.1c-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: []

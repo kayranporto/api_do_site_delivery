@@ -106,4 +106,4 @@ A conclusão técnica desta etapa não configura backup real, PITR, restauraçã
 
 ## Implantação no Render — Etapa 19
 
-A configuração inicial de hospedagem está em `render.yaml` e `docs/render-deployment.md`. Ela descreve dois serviços (API e worker), deixa PostgreSQL e Upstash como dependências externas a configurar e exige revisão de custos/segredos antes de criar recursos. O Blueprint não foi sincronizado e nenhum deploy foi realizado.
+A configuração inicial de hospedagem está em `render.yaml` e `docs/render-deployment.md`. Ela descreve dois serviços (API e worker) e um PostgreSQL gerenciado dedicado; somente Upstash e os segredos de integração precisam ser configurados externamente. O Blueprint não foi sincronizado e nenhum deploy foi realizado.
